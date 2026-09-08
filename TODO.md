@@ -29,10 +29,10 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 - [x] Scheletro della function Python: contratto dell'endpoint, pipeline decode→resize→encode, strumentazione dei tempi (D3, D5, D6, D7, D8, D9).
 - [x] `host.json` con sampling di Application Insights disattivato (D14) ed extension bundle `[4.0.0, 5.0.0)`.
 - [x] Casi di conformità condivisi per l'altezza dell'output (`shared/conformance/`) — diventeranno i test di .NET e Go.
-- [ ] **[M] Scegliere le immagini di test** (risoluzione, numero, licenza) e committarle. Finché non ci sono, l'endpoint risponde 404 su qualunque `image=`.
-- [ ] **[M] Installare le dipendenze e far girare i test in locale**, poi **pinnare la versione di Pillow** in `requirements.txt` con quella effettivamente risolta.
-- [ ] **[M] Provare `func start` in locale** e verificare il contratto della risposta end-to-end.
-- [ ] **[S] Verificare i default di Pillow** su progressive e optimize, per confermare che i flag espliciti bastino (D8).
+- [ ] **[M] Scegliere le immagini di test** (risoluzione, numero, licenza) e committarle. Finché non ci sono, l'endpoint risponde 404 su qualunque `image=` — verificato di persona, comportamento corretto.
+- [x] **[M] Installare le dipendenze e far girare i test in locale, pinnare Pillow.** venv Python 3.12, **Pillow 12.3.0** pinnata in `requirements.txt` (D32). 17 passati, 8 saltati (i test della pipeline, che richiedono immagini reali — si sblocano al task sopra).
+- [x] **[M] Provato `func start` in locale, contratto verificato end-to-end.** `GET /health` → 200 con l'elenco immagini; `POST /resize` senza `image` → 400; `POST /resize?image=inesistente` → 404. Tutti e tre gli status esattamente come da `resize_core.py`.
+- [x] **[S] Verificato: i default di Pillow su `progressive`/`optimize` non sono documentati esplicitamente**, ma irrilevante — il codice li passa già entrambi espliciti (`False`), non dipende dal default (D8).
 
 ## Fase 2 — Infrastruttura Bicep e primo deploy
 
