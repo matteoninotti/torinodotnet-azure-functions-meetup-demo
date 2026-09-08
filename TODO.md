@@ -12,16 +12,18 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 
 > Nessun codice. Finché questa fase non chiude, si può scrivere e testare in locale ma non misurare niente.
 
-- [ ] **[M] Creare l'account Azure.** Account Microsoft personale, non quello dell'ITS. Preferire il free account per lo spending limit (il PAYG non ne ha: gli alert notificano ma non fermano nulla).
-- [ ] **[M] Enrollare MFA** con authenticator + metodo di backup. Non il giorno del talk.
-- [ ] **[M] Verificare che Flex Consumption sia disponibile in Italy North** per *quella* sottoscrizione, col comando documentato. Se non lo è → si ricade su Switzerland North o France Central e si aggiorna `instructions.md`.
-- [ ] **[M] Controllare la quota regionale di core effettiva.** `instructions.md` cita 250 come default, ma le sottoscrizioni trial possono averne molti meno — e la Metrica 3 (burst) è esattamente ciò che sbatte contro una quota bassa. Se la quota è bassa, il target RPS della Metrica 3 va ridimensionato e la cosa va dichiarata.
-- [ ] **[M] Registrare i resource provider**: `Microsoft.Web`, `Microsoft.Storage`, `Microsoft.Insights`, `Microsoft.OperationalInsights`, `Microsoft.App`.
-- [ ] **[M] Creare il resource group** unico del progetto in Italy North. Teardown = cancellare questo.
-- [ ] **[M] Budget alert** a €5 / €10 / €18.
-- [ ] **[M] Installare la toolchain**: `az` (≥ 2.87) · Core Tools `func` (≥ 4.12) · Go (≥ 1.24) · .NET SDK 10 · k6. Vedi §1 del log per cosa c'è già.
-- [ ] **[M] Probe di rischio: hello-world Go deployato su Flex.** Da fare **subito**, prima di scrivere il worker Go vero. Go è in public preview e non compare nella tabella dei language stack supportati: se non si deploya affatto, la premessa del talk cambia e va saputo in settimana 1, non in settimana 3.
-- [ ] **[S] Hello-world Python deployato su Flex** per validare la catena `func` → Azure prima di metterci dentro il codice vero.
+- [x] **[M] Creare l'account Azure.** Free account, $200 di credito (D27). ⚠️ Il credito scade a 30 giorni O a esaurimento, quello che viene prima — non ha uno spending limit in senso tecnico, oltre la soglia l'account si **disabilita**, non addebita. Vedi D27 per il dettaglio e il rischio residuo.
+- [x] **[M] Enrollare MFA** con authenticator + metodo di backup. Non il giorno del talk.
+- [x] **[M] `az login`** — account `mattyninotz@hotmail.com`, sottoscrizione unica "Azure subscription 1", `Enabled`.
+- [x] **[M] Verificare che Flex Consumption sia disponibile in Italy North.** Confermato con `az functionapp list-flexconsumption-locations`: `italynorth` è nell'elenco. Nessun ripiego di regione necessario.
+- [x] **[M→S retrocesso] Controllare la quota regionale di core effettiva.** ⚠️ **Scoperta (D29)**: non esiste un comando `az` documentato per leggere la quota *corrente* prima che esista un'app — l'unico strumento ufficiale è il Flex Consumption Quota tool nel portale, e richiede un'app già esistente. **Spostato in Fase 2** (voce lì sotto), non è più un blocco di Fase 0.
+- [x] **[M] Registrare i resource provider**: `Microsoft.Web`, `Microsoft.Storage`, `Microsoft.Insights`, `Microsoft.OperationalInsights`, `Microsoft.App` — più `Microsoft.Quota`, tentativo per la riga sopra (non risolutivo, vedi D29).
+- [x] **[M] Creare il resource group** unico del progetto in Italy North: `rg-torinodotnet-demo`. Teardown = cancellare questo.
+- [x] **[M] Budget alert a €5 / €10 / €18.** Creato `budget-torinodotnet-demo` via ARM REST (`az consumption budget create` non espone le soglie di notifica in questa versione del CLI — usato `az rest` con il body documentato dall'API). €20/mese, alert a 25/50/90% via email a `mattyninotz@hotmail.com`. **Confermato (D30): la valuta di fatturazione è EUR**, non USD nonostante il credito sia pubblicizzato come "$200" — nessuna conversione necessaria, €20 resta €20. **Confermato anche `spendingLimit: On`** sul billing profile: la rete di sicurezza è più forte di quanto temuto in D27, non solo "nessun addebito automatico" ma proprio un limite di spesa attivo lato Azure.
+- [x] **[M] Installare la toolchain**: `az` 2.90.0 · `func` 4.14.0 · Go 1.27.1 · .NET SDK **10.0.400** (via script ufficiale, non brew cask — richiedeva `sudo` che non si può automatizzare; installato in `~/.dotnet`, aggiunto al PATH in `.zshrc`) · k6 2.2.0.
+- [x] **[M] Probe di rischio: hello-world Go deployato su Flex. ✅ FUNZIONA.** `func-torino-go-probe`, `sku: FlexConsumption`, 2.048 MB, Italy North. `curl` sull'endpoint pubblico → `200 Hello from Go Worker!`. **Gotcha nuovo trovato, non in `instructions.md` (D31)**: va disabilitato HTTP/2 sulla function app durante la preview Go (`az resource update ... --set properties.siteConfig.http20Enabled=false`), altrimenti la doc non garantisce il funzionamento. Provisioning app ~11 minuti (Application Insights + Log Analytics collegati). Risorse ancora **in piedi** per il Python probe — cleanup dopo (task sotto).
+- [x] **[S] Hello-world Python deployato su Flex. ✅ FUNZIONA.** `func-torino-python-probe`, stesso storage account, deploy via Oryx remote build (come da D-decisione sul deploy Python). `curl` → `200`. Un solo warning locale, innocuo: il `func` locale segnala che l'interprete sul Mac (3.14.7) differisce dalla versione target (3.12) — irrilevante perché il build gira da remoto su Oryx con la versione configurata, non con l'interprete locale, ma **da tenere a mente**: se in futuro si testa in locale con `func start`, serve un venv Python 3.12 esplicito sul Mac, non l'interprete di sistema.
+- [x] **[M] Cleanup dei due probe.** Resource group `rg-torinodotnet-demo` cancellato e ricreato vuoto — più pulito che scovare a mano ogni risorsa satellite (Application Insights, Smart Detection alert rule, App Service plan). Il budget (D30) è a livello di sottoscrizione, non di resource group: sopravvive intatto alla cancellazione/ricreazione del RG.
 
 ## Fase 1 — Monorepo e function Python ⏳ in corso
 
@@ -38,6 +40,7 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 
 - [ ] **[M] Bicep** (D20): resource group, storage account, piano Flex + function app Python, Application Insights + Log Analytics.
 - [ ] **[M] Impostare la HTTP trigger concurrency a 1** via Azure CLI (D22). **Non è opzionale e non si fa in `host.json`**: a 2.048 MB il default è 16 per .NET e Go e 1 per Python — lasciarlo così renderebbe il confronto privo di significato.
+- [ ] **[S] Controllare la quota regionale di core effettiva**, ora che l'app Python esiste: portale → app → "Diagnose and solve problems" → "Flex Consumption Quota" (D29 — nessun comando `az` la espone prima che un'app esista). Se bassa, ridimensionare l'RPS target della Metrica 3 e dichiararlo.
 - [ ] **[M] Verificare che il sampling sia davvero spento** guardando la telemetria, non il file di configurazione (D14).
 - [ ] **[M] Pipeline GitHub Actions** con OIDC federato, `workflow_dispatch` (D13). Richiede un'app registration su Entra ID.
 - [ ] **[M] Deploy della function Python** e prima chiamata riuscita da internet.
