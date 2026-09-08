@@ -12,14 +12,15 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 
 > Nessun codice. Finché questa fase non chiude, si può scrivere e testare in locale ma non misurare niente.
 
-- [ ] **[M] Creare l'account Azure.** Account Microsoft personale, non quello dell'ITS. Preferire il free account per lo spending limit (il PAYG non ne ha: gli alert notificano ma non fermano nulla).
+- [x] **[M] Creare l'account Azure.** Free account, $200 di credito (D27). ⚠️ Il credito scade a 30 giorni O a esaurimento, quello che viene prima — non ha uno spending limit in senso tecnico, oltre la soglia l'account si **disabilita**, non addebita. Vedi D27 per il dettaglio e il rischio residuo.
 - [ ] **[M] Enrollare MFA** con authenticator + metodo di backup. Non il giorno del talk.
+- [ ] **[M] `az login`** dal Mac (appena fatto l'MFA) e verifica di quale sottoscrizione è attiva.
 - [ ] **[M] Verificare che Flex Consumption sia disponibile in Italy North** per *quella* sottoscrizione, col comando documentato. Se non lo è → si ricade su Switzerland North o France Central e si aggiorna `instructions.md`.
 - [ ] **[M] Controllare la quota regionale di core effettiva.** `instructions.md` cita 250 come default, ma le sottoscrizioni trial possono averne molti meno — e la Metrica 3 (burst) è esattamente ciò che sbatte contro una quota bassa. Se la quota è bassa, il target RPS della Metrica 3 va ridimensionato e la cosa va dichiarata.
 - [ ] **[M] Registrare i resource provider**: `Microsoft.Web`, `Microsoft.Storage`, `Microsoft.Insights`, `Microsoft.OperationalInsights`, `Microsoft.App`.
 - [ ] **[M] Creare il resource group** unico del progetto in Italy North. Teardown = cancellare questo.
-- [ ] **[M] Budget alert** a €5 / €10 / €18.
-- [ ] **[M] Installare la toolchain**: `az` (≥ 2.87) · Core Tools `func` (≥ 4.12) · Go (≥ 1.24) · .NET SDK 10 · k6. Vedi §1 del log per cosa c'è già.
+- [ ] **[M] Budget alert a €5 / €10 / €18 — la priorità più alta ora che l'account esiste.** Con un free account non c'è addebito da prevenire (D27), ma c'è una **disabilitazione totale a sorpresa** da prevenire: se il credito finisce nel mezzo dei run finali o della prova generale, l'account si blocca senza preavviso automatico.
+- [x] **[M] Installare la toolchain**: `az` 2.90.0 · `func` 4.14.0 · Go 1.27.1 · .NET SDK **10.0.400** (via script ufficiale, non brew cask — richiedeva `sudo` che non si può automatizzare; installato in `~/.dotnet`, aggiunto al PATH in `.zshrc`) · k6 2.2.0.
 - [ ] **[M] Probe di rischio: hello-world Go deployato su Flex.** Da fare **subito**, prima di scrivere il worker Go vero. Go è in public preview e non compare nella tabella dei language stack supportati: se non si deploya affatto, la premessa del talk cambia e va saputo in settimana 1, non in settimana 3.
 - [ ] **[S] Hello-world Python deployato su Flex** per validare la catena `func` → Azure prima di metterci dentro il codice vero.
 
