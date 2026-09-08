@@ -152,9 +152,6 @@ class PipelineResult(NamedTuple):
     width: int
     height: int
     output_bytes: int
-    decode_ms: float
-    resize_ms: float
-    encode_ms: float
     total_ms: float
     payload: bytes
     sha256: Optional[str]
@@ -167,28 +164,25 @@ def run_pipeline(params: Params) -> PipelineResult:
     nel carico a seconda di come cade N sul ciclo, che e' rumore gratuito in un
     esperimento il cui unico scopo e' confrontare durate (D4).
 
-    I tre sotto-tempi servono a vedere *dove* va il tempo in ciascun linguaggio,
-    non solo quanto ne va: e' li' che si legge l'effetto dei tre livelli di
-    ottimizzazione (D6).
+    Un solo cronometro attorno all'intera pipeline, non tre separati: la
+    scomposizione decode/resize/encode e' stata scartata per tenere la
+    strumentazione minima (D6).
     """
     raw = _IMAGES[params.image]
-    decode_ns = 0
-    resize_ns = 0
-    encode_ns = 0
+    total_ns = 0
     payload = b""
     height = 0
 
     for _ in range(params.count):
         t0 = time.perf_counter_ns()
+
         source = Image.open(io.BytesIO(raw))
         source.load()  # Image.open e' lazy: senza load() il decode slitterebbe
         if source.mode != "RGB":
             source = source.convert("RGB")
         height = target_height(source.width, source.height, params.width)
-        t1 = time.perf_counter_ns()
 
         resized = source.resize((params.width, height), resample=Image.Resampling.BILINEAR)
-        t2 = time.perf_counter_ns()
 
         buffer = io.BytesIO()
         resized.save(
@@ -199,14 +193,11 @@ def run_pipeline(params: Params) -> PipelineResult:
             progressive=False,
             optimize=False,
         )
-        t3 = time.perf_counter_ns()
 
-        decode_ns += t1 - t0
-        resize_ns += t2 - t1
-        encode_ns += t3 - t2
+        total_ns += time.perf_counter_ns() - t0
         payload = buffer.getvalue()
 
-    # L'hash sta fuori dai cronometri ed e' spento di default: SHA-256 e'
+    # L'hash sta fuori dal cronometro ed e' spento di default: SHA-256 e'
     # accelerato in hardware su .NET e Go ma non in Python, quindi tenerlo
     # acceso durante le misure infilerebbe nel confronto una differenza di
     # velocita' che non c'entra nulla con l'image processing (D5).
@@ -216,10 +207,7 @@ def run_pipeline(params: Params) -> PipelineResult:
         width=params.width,
         height=height,
         output_bytes=len(payload),
-        decode_ms=decode_ns / 1_000_000,
-        resize_ms=resize_ns / 1_000_000,
-        encode_ms=encode_ns / 1_000_000,
-        total_ms=(decode_ns + resize_ns + encode_ns) / 1_000_000,
+        total_ms=total_ns / 1_000_000,
         payload=payload,
         sha256=digest,
     )

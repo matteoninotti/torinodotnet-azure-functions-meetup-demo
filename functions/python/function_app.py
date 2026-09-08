@@ -57,9 +57,6 @@ def resize(req: func.HttpRequest) -> func.HttpResponse:
         "height": result.height,
         "quality": params.quality,
         "output_bytes": result.output_bytes,
-        "decode_ms": round(result.decode_ms, 3),
-        "resize_ms": round(result.resize_ms, 3),
-        "encode_ms": round(result.encode_ms, 3),
         "total_ms": round(result.total_ms, 3),
     }
     logging.info("%s %s", METRICS_PREFIX, json.dumps(metrics, separators=(",", ":")))
