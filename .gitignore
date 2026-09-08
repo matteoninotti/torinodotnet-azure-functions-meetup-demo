@@ -36,3 +36,6 @@ load/output/
 
 # macOS
 .DS_Store
+
+# Stato locale dell'harness Claude Code, non del progetto
+.claude/
