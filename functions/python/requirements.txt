@@ -1,0 +1,7 @@
+# NOTA: le versioni vanno pinnate dopo il primo `pip install`, con quelle
+# effettivamente risolte, e il valore va scritto nel decision log. Un
+# benchmark che gira su una versione di libreria diversa a ogni deploy non
+# e' un benchmark. Task aperto in TODO.md, Fase 1.
+
+azure-functions
+Pillow
