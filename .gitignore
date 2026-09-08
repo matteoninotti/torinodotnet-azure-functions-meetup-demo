@@ -1,0 +1,38 @@
+# Azure Functions
+local.settings.json
+bin/
+obj/
+.python_packages/
+__azurite_db*__.json
+__blobstorage__/
+__queuestorage__/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# .NET
+[Dd]ebug/
+[Rr]elease/
+*.user
+
+# Go
+/functions/go/bin/
+
+# Node / frontend
+node_modules/
+
+# Bicep / IaC
+*.bicepparam.local
+.azure/
+
+# Risultati dei run di carico (rigenerabili; quelli che finiscono in slide
+# vanno committati esplicitamente in load/results/)
+load/output/
+
+# macOS
+.DS_Store
