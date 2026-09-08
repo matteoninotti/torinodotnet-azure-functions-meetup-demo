@@ -13,7 +13,7 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 > Nessun codice. Finché questa fase non chiude, si può scrivere e testare in locale ma non misurare niente.
 
 - [x] **[M] Creare l'account Azure.** Free account, $200 di credito (D27). ⚠️ Il credito scade a 30 giorni O a esaurimento, quello che viene prima — non ha uno spending limit in senso tecnico, oltre la soglia l'account si **disabilita**, non addebita. Vedi D27 per il dettaglio e il rischio residuo.
-- [ ] **[M] Enrollare MFA** con authenticator + metodo di backup. Non il giorno del talk.
+- [x] **[M] Enrollare MFA** con authenticator + metodo di backup. Non il giorno del talk.
 - [ ] **[M] `az login`** dal Mac (appena fatto l'MFA) e verifica di quale sottoscrizione è attiva.
 - [ ] **[M] Verificare che Flex Consumption sia disponibile in Italy North** per *quella* sottoscrizione, col comando documentato. Se non lo è → si ricade su Switzerland North o France Central e si aggiorna `instructions.md`.
 - [ ] **[M] Controllare la quota regionale di core effettiva.** `instructions.md` cita 250 come default, ma le sottoscrizioni trial possono averne molti meno — e la Metrica 3 (burst) è esattamente ciò che sbatte contro una quota bassa. Se la quota è bassa, il target RPS della Metrica 3 va ridimensionato e la cosa va dichiarata.
