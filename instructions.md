@@ -3,7 +3,7 @@
 ## Obiettivo
 Presentazione tecnica (45–60 minuti, con demo live) rivolta a un pubblico professionale IT, incentrata sul confronto di performance e costi di Azure Functions tra diversi linguaggi di programmazione.
 
-**Lingua di output**: italiano — slide, testo rivolto al pubblico, commenti nel codice destinati alla presentazione. Codice sorgente e nomi delle variabili restano in **inglese** (vedi [decision log](file:///Users/matteo/Library/CloudStorage/OneDrive-Personal/Documenti/my_vault/altro/dotnet_lambda/dotnet_lambda-log.md) D18).
+**Lingua di output**: italiano — slide, testo rivolto al pubblico, commenti nel codice destinati alla presentazione. Codice sorgente e nomi delle variabili restano in **inglese** (vedi decision log `<vault>/altro/dotnet_lambda/dotnet_lambda-log.md`, D18).
 
 ---
 

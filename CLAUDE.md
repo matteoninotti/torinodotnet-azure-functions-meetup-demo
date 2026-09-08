@@ -7,7 +7,9 @@ Demo + talk (45–60 min, pubblico IT professionale, meetup TorinoDotNet) che co
 ## Documenti canonici
 
 - **`instructions.md`** (in questo repo) — la **specifica** del progetto: architettura sperimentale, metodologia di misurazione, billing, gotchas, limitazioni. È il *cosa* e il *perché*.
-- **`dotnet_lambda-log.md`** (nel vault, non in questo repo) — il **decision log**: `/Users/matteo/Library/CloudStorage/OneDrive-Personal/Documenti/my_vault/altro/dotnet_lambda/dotnet_lambda-log.md`. §1 recon · §2 decisioni `D#` · §3 domande aperte. È l'**unica fonte di verità** per le decisioni prese: dove `instructions.md` lascia un TBD, la risposta sta qui.
+- **`dotnet_lambda-log.md`** (nel vault, non in questo repo) — il **decision log**: `<vault>/altro/dotnet_lambda/dotnet_lambda-log.md`. §1 recon · §2 decisioni `D#` · §3 domande aperte. È l'**unica fonte di verità** per le decisioni prese: dove `instructions.md` lascia un TBD, la risposta sta qui.
+
+> `<vault>` è la cartella `my_vault` sincronizzata su OneDrive, in locale sul Mac di Matteo. Il percorso assoluto non è scritto qui perché questo repo è pubblico: si risolve in locale, per esempio con `find ~/Library/CloudStorage -maxdepth 4 -type d -name my_vault`.
 - Appunti preparatori (stessa cartella nel vault): `scaletta - abstract - titolo.md`, `primi appunti wdavide_100726.md`, `secondi appunti.md`. Materiale grezzo, non autoritativo.
 
 Se `instructions.md` e il log dicono cose diverse, **vince il log** — ed è il segnale che `instructions.md` va aggiornato.
