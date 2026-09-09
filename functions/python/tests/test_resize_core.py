@@ -107,3 +107,22 @@ def test_pipeline_count_does_not_change_the_output():
 def test_pipeline_hash_is_off_by_default():
     params = resize_core.parse_params(_params(image=resize_core.available_images()[0]))
     assert resize_core.run_pipeline(params).sha256 is None
+
+
+# --- Catalogo per il selettore del frontend ---------------------------------
+
+
+def test_image_catalog_is_consistent_with_available_images():
+    """I nomi del catalogo devono essere esattamente quelli accettati da ?image=.
+
+    E' il contratto su cui si regge il selettore della SWA: se divergessero,
+    il frontend offrirebbe scelte che l'endpoint di resize rifiuta con 404.
+    """
+    catalog = resize_core.image_catalog()
+    assert [entry["name"] for entry in catalog] == resize_core.available_images()
+
+
+@requires_images
+def test_image_catalog_reports_real_byte_sizes():
+    for entry in resize_core.image_catalog():
+        assert entry["bytes"] > 0

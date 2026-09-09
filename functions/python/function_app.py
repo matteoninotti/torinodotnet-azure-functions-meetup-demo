@@ -76,10 +76,27 @@ def health(req: func.HttpRequest) -> func.HttpResponse:
 
     Non fa parte dell'esperimento — serve a scoprire dal browser che il
     pacchetto di deploy e' arrivato completo, senza dover leggere i log.
+
+    NON e' la fonte dati del frontend: per quello c'e' /api/images. La
+    sovrapposizione nel payload e' voluta, i due endpoint hanno consumatori e
+    contratti diversi e devono poter evolvere separatamente.
     """
     body = {
         "language": LANGUAGE,
         "runtime": RUNTIME,
         "images": resize_core.available_images(),
     }
+    return func.HttpResponse(json.dumps(body), status_code=200, mimetype="application/json")
+
+
+@app.route(route="images", methods=["GET"])
+def images(req: func.HttpRequest) -> func.HttpResponse:
+    """Elenco delle immagini selezionabili: contratto per il selettore della SWA.
+
+    Esiste perche' il frontend possa popolarsi da solo invece di avere i nomi
+    dei file cablati dentro: cambiando il pool con un redeploy, il selettore si
+    aggiorna senza che nessuno lo tocchi. I nomi restituiti qui sono gli stessi
+    che `POST /api/resize` accetta come `?image=`.
+    """
+    body = {"images": resize_core.image_catalog()}
     return func.HttpResponse(json.dumps(body), status_code=200, mimetype="application/json")

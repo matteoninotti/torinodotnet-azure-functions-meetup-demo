@@ -82,6 +82,17 @@ def available_images() -> list:
     return sorted(_IMAGES.keys())
 
 
+def image_catalog() -> list:
+    """Elenco delle immagini selezionabili, per il selettore del frontend.
+
+    Deliberatamente NON include le dimensioni in pixel: ricavarle vorrebbe dire
+    aprire l'header di ogni file all'avvio, cioe' toccare il decoder fuori dal
+    percorso misurato (D3) e aggiungere un pezzo in piu' da replicare identico
+    in .NET e Go. Il numero di byte invece e' gratis, li abbiamo gia' in memoria.
+    """
+    return [{"name": name, "bytes": len(_IMAGES[name])} for name in available_images()]
+
+
 # --- Geometria --------------------------------------------------------------
 
 

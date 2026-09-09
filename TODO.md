@@ -30,9 +30,10 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 - [x] `host.json` con sampling di Application Insights disattivato (D14) ed extension bundle `[4.0.0, 5.0.0)`.
 - [x] Casi di conformità condivisi per l'altezza dell'output (`shared/conformance/`) — diventeranno i test di .NET e Go.
 - [x] **[M] Scegliere le immagini di test — tema "meme scifi spaziale" (D33).** Tre immagini scelte, **fuori dal repo pubblico** (non committate: copyright su materiale di più film/proprietà diverse, dichiarato consapevolmente in D33). Iniettate in `functions/python/images/` a **deploy-time** da una fonte privata, non a runtime — nessuna chiamata di rete nel cold start reale, D3 resta intatto.
-- [ ] **[M] Ri-salvare come JPEG vero il file "npm install"** (D33): ha estensione `.jpg` ma è un PNG — altrimenti eserciterebbe il decoder sbagliato e romperebbe il confronto SIMD.
+- [x] **[M] Ri-salvato come JPEG vero il file "npm install"** (D33): era un PNG con estensione `.jpg`, avrebbe esercitato il decoder sbagliato rompendo il confronto SIMD. Convertito a qualità 95; il PNG originale è conservato accanto con l'estensione giusta (da un JPEG non si torna indietro). Entrambi restano in `meme-candidates/gruppo4/` per ora.
 - [ ] **[S] Decidere il meccanismo concreto di iniezione**: secret di GitHub Actions (quando la pipeline CI di Fase 2 esiste) vs copia manuale locale (sufficiente per ora).
-- [x] **[M→superato] "Scelta libera per i partecipanti"**: non è una feature nuova, è il comportamento già esistente di `?image=` — `resize_core._load_images()` carica tutto il pool, `?image=<nome>` sceglie a runtime senza redeploy. L'unico pezzo mancante è nel selettore della SWA (Fase 6): può popolarsi da `GET /api/health`, che già restituisce l'elenco immagini.
+- [x] **[M→superato] "Scelta libera per i partecipanti"**: non è una feature nuova, è il comportamento già esistente di `?image=` — `resize_core._load_images()` carica tutto il pool, `?image=<nome>` sceglie a runtime senza redeploy.
+- [x] **[M] `GET /api/images`, endpoint dedicato per il selettore della SWA (D34).** Restituisce nome + byte di ogni immagine. **Non si riusa `/api/health`**: è diagnostico per costruzione, e appenderci sopra il frontend lo bloccherebbe a un contratto che non è il suo.
 - [x] **[M] Installare le dipendenze e far girare i test in locale, pinnare Pillow.** venv Python 3.12, **Pillow 12.3.0** pinnata in `requirements.txt` (D32). 17 passati, 8 saltati (i test della pipeline, che richiedono immagini reali — si sblocano al task sopra).
 - [x] **[M] Provato `func start` in locale, contratto verificato end-to-end.** `GET /health` → 200 con l'elenco immagini; `POST /resize` senza `image` → 400; `POST /resize?image=inesistente` → 404. Tutti e tre gli status esattamente come da `resize_core.py`.
 - [x] **[S] Verificato: i default di Pillow su `progressive`/`optimize` non sono documentati esplicitamente**, ma irrilevante — il codice li passa già entrambi espliciti (`False`), non dipende dal default (D8).
@@ -58,6 +59,7 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 ## Fase 4 — Worker .NET
 
 - [ ] **[M] Implementazione** isolated worker .NET 10 con ImageSharp, contratto identico, `Compand = false` (D10), subsampling 4:2:0 esplicito (D8), stesso filtro (D9), stessa formula dell'altezza verificata contro `shared/conformance/` (D7).
+- [ ] **[M] Tre endpoint, non uno**: `resize`, `health` e `images` (D34) — il contratto dev'essere identico nei tre linguaggi, altrimenti il frontend funziona con un backend e non con gli altri.
 - [ ] **[M] Concorrenza a 1** su questa app (D22).
 - [ ] **[S] ReadyToRun come flag di CI**, non nel `.csproj` (D11). **Timebox: 30 minuti.** Se resiste, si toglie e si dichiara nelle limitazioni.
 - [ ] **[S] Verificare il default di `ResizeOptions.Compand`** sulla doc Six Labors.
@@ -65,6 +67,7 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 ## Fase 5 — Worker Go
 
 - [ ] **[M] Implementazione** con `golang.org/x/image/draw` + `image/jpeg`, `BiLinear` (**non** `ApproxBiLinear`, D9), contratto identico, formula dell'altezza verificata contro `shared/conformance/`.
+- [ ] **[M] Tre endpoint, non uno**: `resize`, `health` e `images` (D34), stesso contratto degli altri due worker.
 - [ ] **[M] Build**: `CGO_ENABLED=0 GOOS=linux GOARCH=amd64`, compilazione in CI (Oryx non supportato per Go).
 - [ ] **[M] Concorrenza a 1** su questa app (D22).
 - [ ] **[M] Smoke test sotto il carico dei run finali.** Se cede, è un artefatto della preview e non una caratteristica di Go — e va detto così in slide.
@@ -73,7 +76,7 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 
 - [ ] **[M] Static Web App** che mostra prima/dopo il resize usando `return=image`.
 - [ ] **[M] Decidere se punta a tutti e tre i backend** (selettore di linguaggio) o a uno solo. Non ancora deciso.
-- [ ] **[M] Selettore immagini** popolato dinamicamente da `GET /api/health` (D33) — mai hardcodare i nomi dei file, così cambiare il pool via redeploy aggiorna anche il frontend senza toccarlo.
+- [ ] **[M] Selettore immagini** popolato dinamicamente da `GET /api/images` (D34) — mai hardcodare i nomi dei file, così cambiare il pool via redeploy aggiorna anche il frontend senza toccarlo.
 - [ ] **[M] CORS** verificato dal browser, non solo dalla configurazione.
 
 ## Fase 7 — Run finali e analisi
