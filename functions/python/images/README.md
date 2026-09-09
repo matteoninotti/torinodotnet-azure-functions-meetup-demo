@@ -1,6 +1,14 @@
 # Immagini di test — cartella di destinazione
 
-**Non mettere file qui a mano.** Questa cartella viene popolata **a deploy-time** copiando da `functions/images/`, che è la sorgente unica (vedi il README lì per il perché e per i vincoli sui file).
+**Non mettere file qui a mano.** Questa cartella viene popolata da:
+
+```
+./scripts/sync-images.sh python
+```
+
+che copia da `functions/images/`, la sorgente unica (vedi il README lì per il perché e per i vincoli sui file). Va lanciato **prima di `func start`** in locale, ed è lo stesso comando che userà la pipeline CI prima del deploy.
+
+Un file messo qui a mano viene cancellato alla prima sincronizzazione: la destinazione rispecchia la sorgente, non il contrario.
 
 I file veri non sono mai committati: sono ignorati da git e vivono solo in locale (D33 — materiale protetto da copyright, repo pubblico).
 

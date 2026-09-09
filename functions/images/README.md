@@ -21,10 +21,18 @@ Quindi `functions/images/` è fuori dal pacchetto di ciascun worker per costruzi
 ```
 functions/images/            ← sorgente unica, solo locale, mai committata
         │
-        ├── copia a deploy-time ──→ functions/python/images/
-        ├── copia a deploy-time ──→ functions/dotnet/images/
-        └── copia a deploy-time ──→ functions/go/images/
+        │   ./scripts/sync-images.sh python|dotnet|go|all
+        │
+        ├──→ functions/python/images/
+        ├──→ functions/dotnet/images/
+        └──→ functions/go/images/
 ```
+
+La copia non si fa a mano: la fa `scripts/sync-images.sh`, che è lo stesso comando usato in locale prima di `func start` e dalla pipeline CI prima del deploy. Non è solo un `cp` — **fallisce apposta** in tre casi che altrimenti passerebbero silenziosi:
+
+1. **sorgente vuota** — l'app si avvierebbe lo stesso rispondendo `404` su tutto, senza che il deploy fallisca;
+2. **file non JPEG** — controlla i magic byte, non l'estensione: un PNG rinominato eserciterebbe il decoder sbagliato falsando il confronto (è già successo, D34);
+3. **destinazione che non rispecchia la sorgente** — verifica il risultato invece di fidarsi dei comandi, perché una cancellazione fallita lascerebbe un file orfano che verrebbe comunque deployato e resterebbe selezionabile via `?image=`.
 
 La copia avviene **a deploy-time, non a runtime**: la function non scarica niente da rete all'avvio. Se lo facesse, aggiungerebbe una chiamata di rete proprio dentro la fase che le Metriche 2, 3 e 4 misurano (D33).
 
