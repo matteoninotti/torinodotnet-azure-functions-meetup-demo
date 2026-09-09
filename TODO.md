@@ -25,22 +25,16 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 - [x] **[S] Hello-world Python deployato su Flex. ✅ FUNZIONA.** `func-torino-python-probe`, stesso storage account, deploy via Oryx remote build (come da D-decisione sul deploy Python). `curl` → `200`. Un solo warning locale, innocuo: il `func` locale segnala che l'interprete sul Mac (3.14.7) differisce dalla versione target (3.12) — irrilevante perché il build gira da remoto su Oryx con la versione configurata, non con l'interprete locale, ma **da tenere a mente**: se in futuro si testa in locale con `func start`, serve un venv Python 3.12 esplicito sul Mac, non l'interprete di sistema.
 - [x] **[M] Cleanup dei due probe.** Resource group `rg-torinodotnet-demo` cancellato e ricreato vuoto — più pulito che scovare a mano ogni risorsa satellite (Application Insights, Smart Detection alert rule, App Service plan). Il budget (D30) è a livello di sottoscrizione, non di resource group: sopravvive intatto alla cancellazione/ricreazione del RG.
 
-## Fase 1 — Monorepo e function Python ⏳ in corso
+## Fase 1 — Monorepo e function Python ✅ completata
 
-- [x] Struttura del monorepo, `.gitignore`, `README.md`, `TODO.md` (residuo di D2).
+- [x] Struttura del monorepo, `.gitignore`, `README.md`, `TODO.md` (D2).
 - [x] Scheletro della function Python: contratto dell'endpoint, pipeline decode→resize→encode, strumentazione dei tempi (D3, D5, D6, D7, D8, D9).
 - [x] `host.json` con sampling di Application Insights disattivato (D14) ed extension bundle `[4.0.0, 5.0.0)`.
 - [x] Casi di conformità condivisi per l'altezza dell'output (`shared/conformance/`) — diventeranno i test di .NET e Go.
-- [x] **[M] Scegliere le immagini di test — tema "meme scifi spaziale" (D33).** Tre immagini scelte, **fuori dal repo pubblico** (non committate: copyright su materiale di più film/proprietà diverse, dichiarato consapevolmente in D33). Iniettate in `functions/python/images/` a **deploy-time** da una fonte privata, non a runtime — nessuna chiamata di rete nel cold start reale, D3 resta intatto.
-- [x] **[M] Ri-salvato come JPEG vero il file "npm install"** (D33): era un PNG con estensione `.jpg`, avrebbe esercitato il decoder sbagliato rompendo il confronto SIMD. Convertito a qualità 95; il PNG originale è conservato accanto con l'estensione giusta (da un JPEG non si torna indietro). Entrambi restano in `meme-candidates/gruppo4/` per ora.
-- [x] **[M] Layout deciso: `functions/images/` è la sorgente unica** (D35), le tre `functions/<linguaggio>/images/` sono destinazioni popolate copiando da lì. Una sola copia su cui lavorare, così non può divergere; le destinazioni servono comunque perché il pacchetto di deploy è la sola cartella con `host.json`. `.gitignore` copre già tutte e quattro (sorgente + tre destinazioni), con i README esclusi.
-- [x] **[M] `scripts/sync-images.sh`: la copia è automatica, non si fa a mano (D36).** `./scripts/sync-images.sh python|dotnet|go|all`. Fallisce apposta su sorgente vuota, su file non-JPEG (magic byte, non estensione) e se la destinazione non rispecchia la sorgente. Stesso comando in locale prima di `func start` e in CI prima del deploy.
-- [x] **[M] Sorgente popolata con le tre immagini, rinominate leggibili**: `matt-damon-scifi.jpg`, `npm-install-7-years.jpg`, `rocky-hail-mary.jpg`. I nomi finiscono in `GET /api/images` e quindi nel selettore proiettato durante il talk — `5a04c7cc9a7f6.jpeg` non era presentabile. **27 test passati, 0 saltati** (erano 18 + 9 saltati).
-- [x] **[M→superato] "Scelta libera per i partecipanti"**: non è una feature nuova, è il comportamento già esistente di `?image=` — `resize_core._load_images()` carica tutto il pool, `?image=<nome>` sceglie a runtime senza redeploy.
-- [x] **[M] `GET /api/images`, endpoint dedicato per il selettore della SWA (D34).** Restituisce nome + byte di ogni immagine. **Non si riusa `/api/health`**: è diagnostico per costruzione, e appenderci sopra il frontend lo bloccherebbe a un contratto che non è il suo.
-- [x] **[M] Installare le dipendenze e far girare i test in locale, pinnare Pillow.** venv Python 3.12, **Pillow 12.3.0** pinnata in `requirements.txt` (D32). 17 passati, 8 saltati (i test della pipeline, che richiedono immagini reali — si sblocano al task sopra).
-- [x] **[M] Provato `func start` in locale, contratto verificato end-to-end.** `GET /health` → 200 con l'elenco immagini; `POST /resize` senza `image` → 400; `POST /resize?image=inesistente` → 404. Tutti e tre gli status esattamente come da `resize_core.py`.
-- [x] **[S] Verificato: i default di Pillow su `progressive`/`optimize` non sono documentati esplicitamente**, ma irrilevante — il codice li passa già entrambi espliciti (`False`), non dipende dal default (D8).
+- [x] **[M] Scegliere le immagini di test** (D33) e portarle nel pacchetto (D35, D36).
+- [x] **[M] Installare le dipendenze, far girare i test in locale, pinnare Pillow** (D32).
+- [x] **[M] Provare `func start` in locale** e verificare il contratto end-to-end (D32, D34).
+- [x] **[S] Verificare i default di Pillow** su `progressive` e `optimize` (D8, D32).
 
 ## Fase 2 — Infrastruttura Bicep e primo deploy
 
