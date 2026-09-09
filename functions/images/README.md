@@ -1,0 +1,36 @@
+# Immagini di test — sorgente unica
+
+Questa è la **sola copia** delle immagini di test su cui lavorare. I file veri non sono qui dentro nel repo: sono ignorati da git e vivono solo in locale (D33 — sono materiale protetto da copyright e il repo è pubblico).
+
+## Perché una cartella sola invece di tre
+
+Le tre implementazioni devono ricevere **esattamente gli stessi byte**: è il presupposto di metà delle affermazioni dell'esperimento. Tenere tre copie separate in `functions/python/images/`, `functions/dotnet/images/` e `functions/go/images/` significherebbe che qualcuno, prima o poi, ne aggiorna una e non le altre — e il confronto diventerebbe silenziosamente falso, senza che nessun test se ne accorga.
+
+Una sorgente sola, tre destinazioni popolate copiando: la divergenza diventa impossibile invece che improbabile.
+
+## Perché servono comunque le tre cartelle di destinazione
+
+Non si può usare *solo* questa cartella. Il pacchetto di deploy di una function app è **la cartella che contiene `host.json`**, e niente al di fuori di essa: `func` definisce il progetto proprio così (se manca `host.json` risponde *"Required file 'host.json' not found in directory"*), `.funcignore` filtra i path relativi a quella cartella, e il log di deploy del probe Go diceva *"Creating archive for current directory..."*.
+
+Quindi `functions/images/` è fuori dal pacchetto di ciascun worker per costruzione. Le immagini devono essere **copiate dentro** `functions/<linguaggio>/images/` prima del build.
+
+⚠️ **Non verificato**: se un symlink da `functions/python/images` a `../images` sopravviva al packaging. Non è stato provato, e non va dato per funzionante senza provarlo — la copia esplicita è comunque più leggibile in una pipeline.
+
+## Il flusso
+
+```
+functions/images/            ← sorgente unica, solo locale, mai committata
+        │
+        ├── copia a deploy-time ──→ functions/python/images/
+        ├── copia a deploy-time ──→ functions/dotnet/images/
+        └── copia a deploy-time ──→ functions/go/images/
+```
+
+La copia avviene **a deploy-time, non a runtime**: la function non scarica niente da rete all'avvio. Se lo facesse, aggiungerebbe una chiamata di rete proprio dentro la fase che le Metriche 2, 3 e 4 misurano (D33).
+
+## Vincoli sui file
+
+- **JPEG veri**, non file rinominati: il decoder JPEG è il punto dove vive l'asimmetria tra i tre linguaggi (D3). Un PNG con estensione `.jpg` esercita il decoder sbagliato e falsa la misura — è già successo una volta (D34).
+- **Identiche in tutti e tre i deploy**, così l'offset che introducono sul peso del pacchetto è costante.
+- **Pochi MB in totale**: influenzano il cold start.
+- **Mode RGB**: un JPEG in scala di grigi o CMYK farebbe scattare una conversione in più, asimmetrica rispetto agli altri due linguaggi.

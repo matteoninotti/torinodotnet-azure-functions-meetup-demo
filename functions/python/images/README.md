@@ -1,13 +1,20 @@
-# Immagini di test
+# Immagini di test — cartella di destinazione
 
-Qui vanno le **2–3 immagini JPEG** usate dall'esperimento, committate nel repo e caricate in memoria all'avvio dell'istanza.
+**Non mettere file qui a mano.** Questa cartella viene popolata **a deploy-time** copiando da `functions/images/`, che è la sorgente unica (vedi il README lì per il perché e per i vincoli sui file).
 
-Vincoli, da `instructions.md`:
+I file veri non sono mai committati: sono ignorati da git e vivono solo in locale (D33 — materiale protetto da copyright, repo pubblico).
 
-- **Identiche nei tre deploy**, così l'offset che introducono sul peso del pacchetto è costante tra i tre linguaggi.
-- **Pochi MB in totale**: influenzano il cold start, e più sono grandi più quell'offset pesa.
-- Formato **JPEG**, colore (mode RGB): un JPEG in scala di grigi o CMYK farebbe scattare la conversione in `resize_core`, che è lavoro in più asimmetrico rispetto agli altri due linguaggi.
+## Perché questa cartella esiste, se la sorgente è altrove
 
-**Ancora da decidere** (TODO.md, Fase 1): risoluzione, numero, provenienza e licenza. Finché la cartella è vuota, l'endpoint risponde `404` a qualunque `image=` e i test della pipeline si auto-saltano.
+Il pacchetto di deploy è la cartella che contiene `host.json`, e niente al di fuori di essa. `functions/images/` è fuori dal pacchetto per costruzione, quindi le immagini vanno copiate qui dentro prima del build, altrimenti l'istanza si avvia con zero immagini.
 
-La licenza va scelta con attenzione: il repo è pubblico e le immagini finiranno proiettate durante il talk.
+## Come accorgersene se la copia non è avvenuta
+
+`resize_core._load_images()` non fallisce se la cartella è vuota: restituisce un dizionario vuoto e l'app parte lo stesso. I sintomi sono:
+
+- `GET /api/images` → `{"images": []}`
+- `GET /api/health` → `"images": []`
+- `POST /api/resize?image=<qualunque>` → `404`
+- in locale, 9 test si auto-saltano invece di fallire
+
+È voluto — un'istanza senza immagini deve dirlo chiaramente invece di andare in crash all'avvio — ma significa che **una copia dimenticata non si manifesta come errore di deploy**. Controllare `GET /api/images` dopo ogni deploy è il modo più veloce per accorgersene.
