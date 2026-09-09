@@ -1,6 +1,6 @@
 # Immagini di test — sorgente unica
 
-Questa è la **sola copia** delle immagini di test su cui lavorare. I file veri non sono qui dentro nel repo: sono ignorati da git e vivono solo in locale (D33 — sono materiale protetto da copyright e il repo è pubblico).
+Questa è la **sola copia** delle immagini di test su cui lavorare. I file veri non sono qui dentro nel repo: sono ignorati da git e vivono solo in locale.
 
 ## Perché una cartella sola invece di tre
 
@@ -10,11 +10,9 @@ Una sorgente sola, tre destinazioni popolate copiando: la divergenza diventa imp
 
 ## Perché servono comunque le tre cartelle di destinazione
 
-Non si può usare *solo* questa cartella. Il pacchetto di deploy di una function app è **la cartella che contiene `host.json`**, e niente al di fuori di essa: `func` definisce il progetto proprio così (se manca `host.json` risponde *"Required file 'host.json' not found in directory"*), `.funcignore` filtra i path relativi a quella cartella, e il log di deploy del probe Go diceva *"Creating archive for current directory..."*.
+Non si può usare _solo_ questa cartella. Il pacchetto di deploy di una function app è **la cartella che contiene `host.json`**, e niente al di fuori di essa: `func` definisce il progetto proprio così (se manca `host.json` risponde _"Required file 'host.json' not found in directory"_), `.funcignore` filtra i path relativi a quella cartella, e il log di deploy del probe Go diceva _"Creating archive for current directory..."_.
 
 Quindi `functions/images/` è fuori dal pacchetto di ciascun worker per costruzione. Le immagini devono essere **copiate dentro** `functions/<linguaggio>/images/` prima del build.
-
-⚠️ **Non verificato**: se un symlink da `functions/python/images` a `../images` sopravviva al packaging. Non è stato provato, e non va dato per funzionante senza provarlo — la copia esplicita è comunque più leggibile in una pipeline.
 
 ## Il flusso
 

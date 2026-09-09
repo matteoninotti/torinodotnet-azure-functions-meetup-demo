@@ -10,7 +10,7 @@ che copia da `functions/images/`, la sorgente unica (vedi il README lì per il p
 
 Un file messo qui a mano viene cancellato alla prima sincronizzazione: la destinazione rispecchia la sorgente, non il contrario.
 
-I file veri non sono mai committati: sono ignorati da git e vivono solo in locale (D33 — materiale protetto da copyright, repo pubblico).
+I file veri non sono mai committati: sono ignorati da git e vivono solo in locale.
 
 ## Perché questa cartella esiste, se la sorgente è altrove
 
