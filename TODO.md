@@ -29,7 +29,10 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 - [x] Scheletro della function Python: contratto dell'endpoint, pipeline decode→resize→encode, strumentazione dei tempi (D3, D5, D6, D7, D8, D9).
 - [x] `host.json` con sampling di Application Insights disattivato (D14) ed extension bundle `[4.0.0, 5.0.0)`.
 - [x] Casi di conformità condivisi per l'altezza dell'output (`shared/conformance/`) — diventeranno i test di .NET e Go.
-- [ ] **[M] Scegliere le immagini di test** (risoluzione, numero, licenza) e committarle. Finché non ci sono, l'endpoint risponde 404 su qualunque `image=` — verificato di persona, comportamento corretto.
+- [x] **[M] Scegliere le immagini di test — tema "meme scifi spaziale" (D33).** Tre immagini scelte, **fuori dal repo pubblico** (non committate: copyright su materiale di più film/proprietà diverse, dichiarato consapevolmente in D33). Iniettate in `functions/python/images/` a **deploy-time** da una fonte privata, non a runtime — nessuna chiamata di rete nel cold start reale, D3 resta intatto.
+- [ ] **[M] Ri-salvare come JPEG vero il file "npm install"** (D33): ha estensione `.jpg` ma è un PNG — altrimenti eserciterebbe il decoder sbagliato e romperebbe il confronto SIMD.
+- [ ] **[S] Decidere il meccanismo concreto di iniezione**: secret di GitHub Actions (quando la pipeline CI di Fase 2 esiste) vs copia manuale locale (sufficiente per ora).
+- [x] **[M→superato] "Scelta libera per i partecipanti"**: non è una feature nuova, è il comportamento già esistente di `?image=` — `resize_core._load_images()` carica tutto il pool, `?image=<nome>` sceglie a runtime senza redeploy. L'unico pezzo mancante è nel selettore della SWA (Fase 6): può popolarsi da `GET /api/health`, che già restituisce l'elenco immagini.
 - [x] **[M] Installare le dipendenze e far girare i test in locale, pinnare Pillow.** venv Python 3.12, **Pillow 12.3.0** pinnata in `requirements.txt` (D32). 17 passati, 8 saltati (i test della pipeline, che richiedono immagini reali — si sblocano al task sopra).
 - [x] **[M] Provato `func start` in locale, contratto verificato end-to-end.** `GET /health` → 200 con l'elenco immagini; `POST /resize` senza `image` → 400; `POST /resize?image=inesistente` → 404. Tutti e tre gli status esattamente come da `resize_core.py`.
 - [x] **[S] Verificato: i default di Pillow su `progressive`/`optimize` non sono documentati esplicitamente**, ma irrilevante — il codice li passa già entrambi espliciti (`False`), non dipende dal default (D8).
@@ -70,6 +73,7 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 
 - [ ] **[M] Static Web App** che mostra prima/dopo il resize usando `return=image`.
 - [ ] **[M] Decidere se punta a tutti e tre i backend** (selettore di linguaggio) o a uno solo. Non ancora deciso.
+- [ ] **[M] Selettore immagini** popolato dinamicamente da `GET /api/health` (D33) — mai hardcodare i nomi dei file, così cambiare il pool via redeploy aggiorna anche il frontend senza toccarlo.
 - [ ] **[M] CORS** verificato dal browser, non solo dalla configurazione.
 
 ## Fase 7 — Run finali e analisi
