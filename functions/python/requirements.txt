@@ -1,0 +1,9 @@
+# Pillow pinnata: un benchmark che gira su una versione diversa a ogni
+# deploy non e' un benchmark (D8/D9 dipendono dal comportamento esatto di
+# questa versione). Risolta il 2026-09-08, vedi log D32.
+# azure-functions NON pinnata di proposito: e' la libreria di interfaccia col
+# runtime host, non il codice misurato - il deploy remoto su Oryx la
+# risolve alla versione compatibile con l'host in quel momento.
+
+azure-functions
+Pillow==12.3.0

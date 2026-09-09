@@ -1,0 +1,9 @@
+.venv
+venv
+__pycache__
+.pytest_cache
+tests
+local.settings.json
+local.settings.json.example
+requirements-dev.txt
+images/README.md

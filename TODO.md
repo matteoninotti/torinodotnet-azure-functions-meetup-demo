@@ -31,10 +31,16 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 - [x] Scheletro della function Python: contratto dell'endpoint, pipeline decode→resize→encode, strumentazione dei tempi (D3, D5, D6, D7, D8, D9).
 - [x] `host.json` con sampling di Application Insights disattivato (D14) ed extension bundle `[4.0.0, 5.0.0)`.
 - [x] Casi di conformità condivisi per l'altezza dell'output (`shared/conformance/`) — diventeranno i test di .NET e Go.
-- [ ] **[M] Scegliere le immagini di test** (risoluzione, numero, licenza) e committarle. Finché non ci sono, l'endpoint risponde 404 su qualunque `image=`.
-- [ ] **[M] Installare le dipendenze e far girare i test in locale**, poi **pinnare la versione di Pillow** in `requirements.txt` con quella effettivamente risolta.
-- [ ] **[M] Provare `func start` in locale** e verificare il contratto della risposta end-to-end.
-- [ ] **[S] Verificare i default di Pillow** su progressive e optimize, per confermare che i flag espliciti bastino (D8).
+- [x] **[M] Scegliere le immagini di test — tema "meme scifi spaziale" (D33).** Tre immagini scelte, **fuori dal repo pubblico** (non committate: copyright su materiale di più film/proprietà diverse, dichiarato consapevolmente in D33). Iniettate in `functions/python/images/` a **deploy-time** da una fonte privata, non a runtime — nessuna chiamata di rete nel cold start reale, D3 resta intatto.
+- [x] **[M] Ri-salvato come JPEG vero il file "npm install"** (D33): era un PNG con estensione `.jpg`, avrebbe esercitato il decoder sbagliato rompendo il confronto SIMD. Convertito a qualità 95; il PNG originale è conservato accanto con l'estensione giusta (da un JPEG non si torna indietro). Entrambi restano in `meme-candidates/gruppo4/` per ora.
+- [x] **[M] Layout deciso: `functions/images/` è la sorgente unica** (D35), le tre `functions/<linguaggio>/images/` sono destinazioni popolate copiando da lì. Una sola copia su cui lavorare, così non può divergere; le destinazioni servono comunque perché il pacchetto di deploy è la sola cartella con `host.json`. `.gitignore` copre già tutte e quattro (sorgente + tre destinazioni), con i README esclusi.
+- [x] **[M] `scripts/sync-images.sh`: la copia è automatica, non si fa a mano (D36).** `./scripts/sync-images.sh python|dotnet|go|all`. Fallisce apposta su sorgente vuota, su file non-JPEG (magic byte, non estensione) e se la destinazione non rispecchia la sorgente. Stesso comando in locale prima di `func start` e in CI prima del deploy.
+- [x] **[M] Sorgente popolata con le tre immagini, rinominate leggibili**: `matt-damon-scifi.jpg`, `npm-install-7-years.jpg`, `rocky-hail-mary.jpg`. I nomi finiscono in `GET /api/images` e quindi nel selettore proiettato durante il talk — `5a04c7cc9a7f6.jpeg` non era presentabile. **27 test passati, 0 saltati** (erano 18 + 9 saltati).
+- [x] **[M→superato] "Scelta libera per i partecipanti"**: non è una feature nuova, è il comportamento già esistente di `?image=` — `resize_core._load_images()` carica tutto il pool, `?image=<nome>` sceglie a runtime senza redeploy.
+- [x] **[M] `GET /api/images`, endpoint dedicato per il selettore della SWA (D34).** Restituisce nome + byte di ogni immagine. **Non si riusa `/api/health`**: è diagnostico per costruzione, e appenderci sopra il frontend lo bloccherebbe a un contratto che non è il suo.
+- [x] **[M] Installare le dipendenze e far girare i test in locale, pinnare Pillow.** venv Python 3.12, **Pillow 12.3.0** pinnata in `requirements.txt` (D32). 17 passati, 8 saltati (i test della pipeline, che richiedono immagini reali — si sblocano al task sopra).
+- [x] **[M] Provato `func start` in locale, contratto verificato end-to-end.** `GET /health` → 200 con l'elenco immagini; `POST /resize` senza `image` → 400; `POST /resize?image=inesistente` → 404. Tutti e tre gli status esattamente come da `resize_core.py`.
+- [x] **[S] Verificato: i default di Pillow su `progressive`/`optimize` non sono documentati esplicitamente**, ma irrilevante — il codice li passa già entrambi espliciti (`False`), non dipende dal default (D8).
 
 ## Fase 2 — Infrastruttura Bicep e primo deploy
 
@@ -42,8 +48,10 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 - [ ] **[M] Impostare la HTTP trigger concurrency a 1** via Azure CLI (D22). **Non è opzionale e non si fa in `host.json`**: a 2.048 MB il default è 16 per .NET e Go e 1 per Python — lasciarlo così renderebbe il confronto privo di significato.
 - [ ] **[S] Controllare la quota regionale di core effettiva**, ora che l'app Python esiste: portale → app → "Diagnose and solve problems" → "Flex Consumption Quota" (D29 — nessun comando `az` la espone prima che un'app esista). Se bassa, ridimensionare l'RPS target della Metrica 3 e dichiararlo.
 - [ ] **[M] Verificare che il sampling sia davvero spento** guardando la telemetria, non il file di configurazione (D14).
+- [ ] **[S] Decidere come le immagini arrivano in `functions/images/` in CI**: secret di GitHub Actions vs artifact vs storage privato. Problema separato da `sync-images.sh`, che legge dalla sorgente e basta — non si occupa di come ci è arrivata.
 - [ ] **[M] Pipeline GitHub Actions** con OIDC federato, `workflow_dispatch` (D13). Richiede un'app registration su Entra ID.
 - [ ] **[M] Deploy della function Python** e prima chiamata riuscita da internet.
+- [ ] **[S] Controllo post-deploy: `GET /api/images` non deve restituire lista vuota.** Una copia dimenticata **non** fa fallire il deploy — l'app parte lo stesso con zero immagini e risponde 404 su tutto. È voluto, ma va intercettato guardando, non sperando.
 - [ ] **[S] Configurare il CORS** con l'origine della Static Web App (D12). Può aspettare la Fase 6.
 
 ## Fase 3 — Catena di misura
@@ -58,6 +66,7 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 ## Fase 4 — Worker .NET
 
 - [ ] **[M] Implementazione** isolated worker .NET 10 con ImageSharp, contratto identico, `Compand = false` (D10), subsampling 4:2:0 esplicito (D8), stesso filtro (D9), stessa formula dell'altezza verificata contro `shared/conformance/` (D7).
+- [ ] **[M] Tre endpoint, non uno**: `resize`, `health` e `images` (D34) — il contratto dev'essere identico nei tre linguaggi, altrimenti il frontend funziona con un backend e non con gli altri.
 - [ ] **[M] Concorrenza a 1** su questa app (D22).
 - [ ] **[S] ReadyToRun come flag di CI**, non nel `.csproj` (D11). **Timebox: 30 minuti.** Se resiste, si toglie e si dichiara nelle limitazioni.
 - [ ] **[S] Verificare il default di `ResizeOptions.Compand`** sulla doc Six Labors.
@@ -65,6 +74,7 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 ## Fase 5 — Worker Go
 
 - [ ] **[M] Implementazione** con `golang.org/x/image/draw` + `image/jpeg`, `BiLinear` (**non** `ApproxBiLinear`, D9), contratto identico, formula dell'altezza verificata contro `shared/conformance/`.
+- [ ] **[M] Tre endpoint, non uno**: `resize`, `health` e `images` (D34), stesso contratto degli altri due worker.
 - [ ] **[M] Build**: `CGO_ENABLED=0 GOOS=linux GOARCH=amd64`, compilazione in CI (Oryx non supportato per Go).
 - [ ] **[M] Concorrenza a 1** su questa app (D22).
 - [ ] **[M] Smoke test sotto il carico dei run finali.** Se cede, è un artefatto della preview e non una caratteristica di Go — e va detto così in slide.
@@ -73,6 +83,7 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 
 - [ ] **[M] Static Web App** che mostra prima/dopo il resize usando `return=image`.
 - [ ] **[M] Decidere se punta a tutti e tre i backend** (selettore di linguaggio) o a uno solo. Non ancora deciso.
+- [ ] **[M] Selettore immagini** popolato dinamicamente da `GET /api/images` (D34) — mai hardcodare i nomi dei file, così cambiare il pool via redeploy aggiorna anche il frontend senza toccarlo.
 - [ ] **[M] CORS** verificato dal browser, non solo dalla configurazione.
 
 ## Fase 7 — Run finali e analisi

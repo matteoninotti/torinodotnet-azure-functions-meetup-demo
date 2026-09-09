@@ -1,0 +1,20 @@
+{
+  "description": "Casi di conformita' per il calcolo dell'altezza dell'output. Le tre implementazioni (Python, .NET, Go) devono produrre esattamente questi valori. E' il modo in cui la simmetria viene verificata invece che sperata: se un linguaggio sbaglia un caso, l'affermazione 'output con dimensioni identiche' cade e va tolta dalle slide.",
+  "formula": "max(1, (src_height * dst_width + src_width / 2) / src_width) — tutte divisioni INTERE",
+  "decision": "D7",
+  "why_not_round": "round() non e' la stessa operazione nei tre linguaggi: Python e C# arrotondano 0.5 al pari (banker's rounding), Go per eccesso in valore assoluto. Il caso 2x1 -> 1 qui sotto e' esattamente dove divergerebbero.",
+  "cases": [
+    { "src_width": 1920, "src_height": 1080, "dst_width": 800, "expected": 450, "why": "16:9, rapporto esatto" },
+    { "src_width": 1080, "src_height": 1920, "dst_width": 800, "expected": 1422, "why": "verticale, tronca verso il basso" },
+    { "src_width": 4032, "src_height": 3024, "dst_width": 800, "expected": 600, "why": "4:3 tipico da fotocamera, rapporto esatto" },
+    { "src_width": 8000, "src_height": 6000, "dst_width": 800, "expected": 600, "why": "sorgente grande, stesso rapporto" },
+    { "src_width": 1000, "src_height": 667, "dst_width": 800, "expected": 534, "why": "533.6 -> half-up arrotonda in su" },
+    { "src_width": 1000, "src_height": 666, "dst_width": 800, "expected": 533, "why": "532.8 -> arrotonda a 533" },
+    { "src_width": 3, "src_height": 2, "dst_width": 800, "expected": 533, "why": "533.33 -> tronca" },
+    { "src_width": 400, "src_height": 300, "dst_width": 800, "expected": 600, "why": "upscale, non solo riduzione" },
+    { "src_width": 2, "src_height": 1, "dst_width": 1, "expected": 1, "why": "CASO CRITICO: esattamente 0.5. half-up da 1; round() di Python e Math.Round di C# darebbero 0." },
+    { "src_width": 3, "src_height": 1, "dst_width": 2, "expected": 1, "why": "0.667 -> half-up da 1, con src_width dispari (la divisione intera di src_width/2 tronca)" },
+    { "src_width": 4, "src_height": 1, "dst_width": 1, "expected": 1, "why": "0.25 -> darebbe 0, il clamp max(1, ...) lo salva" },
+    { "src_width": 5, "src_height": 1, "dst_width": 2, "expected": 1, "why": "0.4 -> darebbe 0, clamp" }
+  ]
+}
