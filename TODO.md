@@ -16,7 +16,7 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 - [x] **[M] Enrollare MFA** con authenticator + metodo di backup. Non il giorno del talk.
 - [x] **[M] `az login`** — account Microsoft personale, sottoscrizione unica "Azure subscription 1", `Enabled`.
 - [x] **[M] Verificare che Flex Consumption sia disponibile in Italy North.** Confermato con `az functionapp list-flexconsumption-locations`: `italynorth` è nell'elenco. Nessun ripiego di regione necessario.
-- [x] **[M→S retrocesso] Controllare la quota regionale di core effettiva.** ⚠️ **Scoperta (D29)**: non esiste un comando `az` documentato per leggere la quota *corrente* prima che esista un'app — l'unico strumento ufficiale è il Flex Consumption Quota tool nel portale, e richiede un'app già esistente. **Spostato in Fase 2** (voce lì sotto), non è più un blocco di Fase 0.
+- [x] **[M→S retrocesso] Controllare la quota regionale di core effettiva.** ⚠️ **Scoperta (D29)**: non esiste un comando `az` documentato per leggere la quota _corrente_ prima che esista un'app — l'unico strumento ufficiale è il Flex Consumption Quota tool nel portale, e richiede un'app già esistente. **Spostato in Fase 2** (voce lì sotto), non è più un blocco di Fase 0.
 - [x] **[M] Registrare i resource provider**: `Microsoft.Web`, `Microsoft.Storage`, `Microsoft.Insights`, `Microsoft.OperationalInsights`, `Microsoft.App` — più `Microsoft.Quota`, tentativo per la riga sopra (non risolutivo, vedi D29).
 - [x] **[M] Creare il resource group** unico del progetto in Italy North: `rg-torinodotnet-demo`. Teardown = cancellare questo.
 - [x] **[M] Budget alert a €5 / €10 / €18.** Creato `budget-torinodotnet-demo` via ARM REST (`az consumption budget create` non espone le soglie di notifica in questa versione del CLI — usato `az rest` con il body documentato dall'API). €20/mese, alert a 25/50/90% via email all'indirizzo dell'account Azure. **Confermato (D30): la valuta di fatturazione è EUR**, non USD nonostante il credito sia pubblicizzato come "$200" — nessuna conversione necessaria, €20 resta €20. **Confermato anche `spendingLimit: On`** sul billing profile: la rete di sicurezza è più forte di quanto temuto in D27, non solo "nessun addebito automatico" ma proprio un limite di spesa attivo lato Azure.
@@ -36,7 +36,7 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 - [x] **[M] Provare `func start` in locale** e verificare il contratto end-to-end (D32, D34).
 - [x] **[S] Verificare i default di Pillow** su `progressive` e `optimize` (D8, D32).
 
-## Fase 2 — Infrastruttura Bicep e primo deploy
+## Fase 2 — Infrastruttura Bicep e primo deploy ⏳ in corso
 
 - [ ] **[M] Bicep** (D20): resource group, storage account, piano Flex + function app Python, Application Insights + Log Analytics.
 - [ ] **[M] Impostare la HTTP trigger concurrency a 1** via Azure CLI (D22). **Non è opzionale e non si fa in `host.json`**: a 2.048 MB il default è 16 per .NET e Go e 1 per Python — lasciarlo così renderebbe il confronto privo di significato.
@@ -102,10 +102,10 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 
 ## Rischi aperti
 
-| Rischio | Impatto | Mitigazione |
-|---|---|---|
-| Account Azure non ancora creato a 3 settimane dal talk | Blocca tutto | Fase 0, oggi |
-| Go in public preview non deploya o cede sotto carico | Perde un terzo del talk | Probe hello-world in Fase 0, non in Fase 5 |
-| Quota di core bassa su sottoscrizione trial | La Metrica 3 non è eseguibile come progettata | Verificare in Fase 0, ridimensionare l'RPS e dichiararlo |
-| Concorrenza non impostata a 1 su .NET e Go | **I numeri del confronto sarebbero falsi** | D22, task bloccante di Fase 2 |
-| Immagini di test non ancora scelte | Blocca la taratura di `count` | Fase 1 |
+| Rischio                                                | Impatto                                       | Mitigazione                                              |
+| ------------------------------------------------------ | --------------------------------------------- | -------------------------------------------------------- |
+| Account Azure non ancora creato a 3 settimane dal talk | Blocca tutto                                  | Fase 0, oggi                                             |
+| Go in public preview non deploya o cede sotto carico   | Perde un terzo del talk                       | Probe hello-world in Fase 0, non in Fase 5               |
+| Quota di core bassa su sottoscrizione trial            | La Metrica 3 non è eseguibile come progettata | Verificare in Fase 0, ridimensionare l'RPS e dichiararlo |
+| Concorrenza non impostata a 1 su .NET e Go             | **I numeri del confronto sarebbero falsi**    | D22, task bloccante di Fase 2                            |
+| Immagini di test non ancora scelte                     | Blocca la taratura di `count`                 | Fase 1                                                   |
