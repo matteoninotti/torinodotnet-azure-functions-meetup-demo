@@ -98,6 +98,9 @@ Vincoli della preview (dalla stessa pagina):
 - **Remote build (Oryx) non supportato**: compilazione locale in binario statico
 - **Solo Linux** in Azure
 - **Go non compare nella tabella "Supported language stack versions"** della pagina Flex Consumption. Normale per una preview, ma è un rischio pratico da mettere in conto.
+- **HTTP/2 va disabilitato esplicitamente sulla function app** durante la preview (`az resource update ... --set properties.siteConfig.http20Enabled=false`). Fonte: [How to create a function in Azure from the command line, pivot Go](https://learn.microsoft.com/en-us/azure/azure-functions/how-to-create-function-azure-cli?pivots=programming-language-go) — passo esplicito nella quickstart, **non menzionato** nella pagina "Known limitations" della reference. Verificato con un deploy reale: senza questo passo il comportamento non è garantito dalla documentazione.
+
+**✅ Probe di rischio superato (2026-09-08).** Un hello-world Go è stato deployato su Flex Consumption (2.048 MB, Italy North) e ha risposto `200` da internet. Il rischio strutturale "Go in preview potrebbe non deployarsi affatto" è chiuso. Dettagli e comandi esatti nel decision log, D31.
 
 Trigger disponibili per il worker Go: HTTP, Timer, Service Bus, Event Hubs, Event Grid, Cosmos DB, Blob Storage.
 
