@@ -295,7 +295,7 @@ Tre formulazioni ufficiali convergono ma non chiudono la questione:
 1. App a zero istanze, nessun altro traffico.
 2. **Una sola richiesta**, con `count=N` tarato perché la durata superi 1.000 ms (così il minimo fatturabile non maschera il risultato).
 3. Da Application Insights: durata server-side `D` ms.
-4. Da Azure Monitor: `OnDemandFunctionExecutionUnits` in quel minuto, aggregazione Sum.
+4. Da Azure Monitor: `OnDemandFunctionExecutionUnits`, aggregazione Sum. ⚠️ **NON leggere "quel minuto": darebbe zero.** Verificato sul campo (decision log D60) che la metrica **ritarda di 1-2 minuti e si spalma su più minuti** — per un run girato alle 17:12:49-17:13:20 i minuti 17:12 e 17:13 riportavano `0` e il consumo compariva a 17:14 e 17:15. Va **sommata su una finestra** che parta dal minuto del run e arrivi ad almeno 3-4 minuti dopo, controllando che la coda sia tornata a zero prima di chiudere la somma.
 5. Se ≈ `2048 × D` → init **non** fatturato. Se ≈ `2048 × (D + cold start)` → init fatturato.
 6. Tre ripetizioni. Farlo su **Python**, che ha il cold start più lungo e quindi il segnale più forte.
 
