@@ -1,0 +1,97 @@
+# Deploy di un worker su Azure Functions Flex Consumption.
+#
+# Parte SOLO a mano (workflow_dispatch), mai su push: un deploy involontario
+# nel mezzo di un run di misura resetta le istanze e invalida la misura.
+#
+# Autenticazione OIDC federata: nessun secret con credenziali nel repo, solo
+# gli identificativi (client/tenant/subscription) come variables.
+
+name: Deploy worker
+
+on:
+  workflow_dispatch:
+    inputs:
+      language:
+        description: Worker da deployare
+        required: true
+        default: python
+        type: choice
+        options:
+          - python
+          - dotnet
+          - go
+
+permissions:
+  id-token: write # necessario per OIDC
+  contents: read # necessario per checkout
+
+env:
+  RESOURCE_GROUP: rg-torinodotnet-demo
+  IMAGES_CONTAINER: test-images
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Login su Azure (OIDC)
+        uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      # Le immagini di test non stanno nel repo. Arrivano da un container
+      # privato dello stesso storage account: la pipeline e' gia' autenticata
+      # su Azure, quindi non serve nessun secret in piu' (D40).
+      - name: Scarica le immagini di test
+        run: |
+          STORAGE=$(az storage account list \
+            --resource-group "$RESOURCE_GROUP" \
+            --query "[0].name" -o tsv)
+          az storage blob download-batch \
+            --account-name "$STORAGE" \
+            --source "$IMAGES_CONTAINER" \
+            --destination functions/images \
+            --auth-mode key \
+            --no-progress -o none
+
+      # Porta le immagini dentro il pacchetto del worker. Fallisce apposta se
+      # la sorgente e' vuota o se un file non e' un JPEG vero (D36): meglio
+      # rompere qui che deployare un'app che risponde 404 su tutto.
+      - name: Sincronizza le immagini nel worker
+        run: ./scripts/sync-images.sh ${{ inputs.language }}
+
+      - name: Ricava il nome della function app
+        id: app
+        run: echo "name=torinodotnet-${{ inputs.language }}" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy
+        uses: Azure/functions-action@v1
+        with:
+          app-name: ${{ steps.app.outputs.name }}
+          package: functions/${{ inputs.language }}
+          # Su Flex il build remoto e' sempre Oryx: non vanno impostati
+          # scm-do-build-during-deployment ne' enable-oryx-build.
+          remote-build: true
+
+      # Una copia dimenticata non fa fallire il deploy: l'app parte lo stesso
+      # e risponde 404 su tutto. Qui si guarda invece di sperare (D35).
+      - name: Verifica che l'app veda le immagini
+        run: |
+          URL="https://${{ steps.app.outputs.name }}.azurewebsites.net/api/images"
+          for tentativo in 1 2 3 4 5; do
+            RISPOSTA=$(curl -sS --max-time 60 "$URL" || true)
+            CONTEGGIO=$(echo "$RISPOSTA" | python3 -c \
+              "import sys,json; print(len(json.load(sys.stdin).get('images',[])))" 2>/dev/null || echo 0)
+            if [ "$CONTEGGIO" -gt 0 ]; then
+              echo "$CONTEGGIO immagini disponibili"
+              echo "$RISPOSTA"
+              exit 0
+            fi
+            echo "tentativo $tentativo: nessuna immagine ancora, il cold start puo' volerci un po'"
+            sleep 15
+          done
+          echo "L'app risponde ma non vede nessuna immagine: il pacchetto e' arrivato incompleto." >&2
+          exit 1
