@@ -6,10 +6,11 @@ Demo + talk (45–60 min, pubblico IT professionale, meetup TorinoDotNet) che co
 
 ## Documenti canonici
 
-- **`instructions.md`** (in questo repo) — la **specifica** del progetto: architettura sperimentale, metodologia di misurazione, billing, gotchas, limitazioni. È il *cosa* e il *perché*.
+- **`instructions.md`** (in questo repo) — la **specifica** del progetto: architettura sperimentale, metodologia di misurazione, billing, gotchas, limitazioni. È il _cosa_ e il _perché_.
 - **`dotnet_lambda-log.md`** (nel vault, non in questo repo) — il **decision log**: `<vault>/altro/dotnet_lambda/dotnet_lambda-log.md`. §1 recon · §2 decisioni `D#` · §3 domande aperte. È l'**unica fonte di verità** per le decisioni prese: dove `instructions.md` lascia un TBD, la risposta sta qui.
 
 > `<vault>` è la cartella `my_vault` sincronizzata su OneDrive, in locale sul Mac di Matteo. Il percorso assoluto non è scritto qui perché questo repo è pubblico: si risolve in locale, per esempio con `find ~/Library/CloudStorage -maxdepth 4 -type d -name my_vault`.
+
 - Appunti preparatori (stessa cartella nel vault): `scaletta - abstract - titolo.md`, `primi appunti wdavide_100726.md`, `secondi appunti.md`. Materiale grezzo, non autoritativo.
 
 Se `instructions.md` e il log dicono cose diverse, **vince il log** — ed è il segnale che `instructions.md` va aggiornato.
@@ -18,7 +19,7 @@ Se `instructions.md` e il log dicono cose diverse, **vince il log** — ed è il
 
 - **Regola sulle fonti — la più importante.** Ogni affermazione fattuale porta il **link inline alla fonte ufficiale**, incollato accanto all'affermazione. Non basta nominare la pagina: serve l'URL. Se una fonte ufficiale non esiste o non si trova, si scrive `⚠️ FONTE UFFICIALE NON TROVATA` insieme a quello che si è comunque trovato e a come si intende verificarlo. Le fonti community valgono solo come conferma incrociata, mai come base per un numero da slide. Vedi la sezione in cima a `instructions.md`.
 - **Mai inventare** numeri, benchmark, prezzi, comandi, flag, versioni o URL. Se non è verificato, si dichiara non verificato.
-- **Le motivazioni sulla provenienza di materiali esterni stanno nel decision log, non nel repo.** Nel repo va solo il piano operativo — *cosa* si fa ("le immagini restano in locale e si iniettano a deploy-time"), non *perché* si è scelto così. Vale per `instructions.md`, README, commenti al codice, nomi di variabile e **messaggi di commit**: il repo è pubblico e permanente, il log sta nel vault e non lo è. *Non riguarda il licensing tecnico delle dipendenze* — la soglia commerciale di ImageSharp, per esempio, è un contenuto del talk e sta benissimo in `instructions.md`.
+- **Le motivazioni sulla provenienza di materiali esterni stanno nel decision log, non nel repo.** `D38` Nel repo va solo il piano operativo — _cosa_ si fa ("le immagini restano in locale e si iniettano a deploy-time"), non _perché_ si è scelto così. Vale per `instructions.md`, README, commenti al codice, nomi di variabile e **messaggi di commit**: il repo è pubblico e permanente, il log sta nel vault e non lo è. _Non riguarda il licensing tecnico delle dipendenze_ — la soglia commerciale di ImageSharp, per esempio, è un contenuto del talk e sta benissimo in `instructions.md`.
 - **Segnalare sempre quando una fonte nuova corregge una vecchia** — mai sostituire silenziosamente.
 - **Fare domande di chiarimento mirate prima di produrre output.** Meglio troppe domande che output sbagliato.
 - **Livello di spiegazione**: studente IT junior — profondità tecnica reale, senza banalizzare ma senza dare per scontato gergo avanzato non ancora introdotto.
