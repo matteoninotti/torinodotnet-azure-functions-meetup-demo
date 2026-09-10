@@ -36,19 +36,18 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 - [x] **[M] Provare `func start` in locale** e verificare il contratto end-to-end (D32, D34).
 - [x] **[S] Verificare i default di Pillow** su `progressive` e `optimize` (D8, D32).
 
-## Fase 2 — Infrastruttura Bicep e primo deploy ⏳ in corso
+## Fase 2 — Infrastruttura Bicep e primo deploy ✅ completata
 
 - [x] **[M] Bicep** (D20): storage account, piano Flex + function app Python, Application Insights + Log Analytics. Il deploy è **a scope resource group**: `rg-torinodotnet-demo` esiste già dalla Fase 0 (D30) e il Bicep ci si appoggia invece di ricrearlo — così il teardown resta "cancella il resource group". **I parametri bloccati vanno scritti espliciti, non lasciati al default**: instance size **2.048 MB**, runtime **Python 3.12**, regione **Italy North**. Un default diverso non fa fallire niente, si scopre solo quando i numeri non tornano.
 - [x] **[M] Scrivere il Bicep parametrico sul linguaggio fin da subito**, anche se in Fase 2 se ne istanzia uno solo. Su Flex vale **una sola app per piano** (`instructions.md`, § Considerations): i tre worker richiedono **tre piani e tre function app**, non tre app sullo stesso piano. Un modulo che prende il linguaggio come parametro si istanzia tre volte in Fase 4 e 5 senza riscritture; un Bicep monolitico su Python andrebbe rifatto. Lo storage account può invece restare **condiviso** — il vincolo riguarda il piano, non lo storage (verificato coi due probe di Fase 0, che condividevano `sttorinogo92557`).
 - [x] **[M] HTTP trigger concurrency a 1 — dichiarata nel Bicep, non via CLI (D39).** `scaleAndConcurrency.triggers.http.perInstanceConcurrency` è una proprietà ARM valida: così un re-provisioning la **ri-imposta** invece di riportarla al default, che era il rischio residuo di D22.
 - [x] **[M] Verificata rileggendola dall'app**: `perInstanceConcurrency: 1`, insieme a memoria 2048, Python 3.12, `FlexConsumption`, Italy North.
-- [ ] **[S] Controllare la quota regionale di core effettiva**, ora che l'app Python esiste: portale → app → "Diagnose and solve problems" → "Flex Consumption Quota" (D29 — nessun comando `az` la espone prima che un'app esista). Se bassa, ridimensionare l'RPS target della Metrica 3 e dichiararlo.
+- [x] **[S] Quota regionale verificata dal portale (D42): 250 core, 512.000 MB — il default, non ridotta.** Nessun ridimensionamento dell'RPS target per la Metrica 3.
 - [x] **[S] Come le immagini arrivano in CI: container privato nello stesso storage account (D40).** La pipeline è già autenticata su Azure via OIDC, quindi le scarica da lì senza nessun secret aggiuntivo. Scartato il secret di GitHub: le tre immagini in base64 superano il limite di 64 KB per secret.
-- [ ] **[M] Pipeline GitHub Actions** con OIDC federato, `workflow_dispatch` (D13). Workflow scritto (`.github/workflows/deploy.yml`), app registration e credenziale federata create, variabili impostate sul repo. **Manca solo il role assignment RBAC**, bloccato dal classificatore: va lanciato da Matteo (comando in D40). Finché non c'è, il login OIDC della pipeline fallisce.
-- [ ] **[M] Deploy della function Python** e prima chiamata riuscita da internet.
-- [ ] **[S] Controllo post-deploy: `GET /api/images` non deve restituire lista vuota.** Una copia dimenticata **non** fa fallire il deploy — l'app parte lo stesso con zero immagini e risponde 404 su tutto. È voluto, ma va intercettato guardando, non sperando.
-- [ ] **[M] Verificare che il sampling sia davvero spento** guardando la telemetria, non il file di configurazione (D14). **Va qui e non prima**: serve un'app deployata che abbia già servito richieste, altrimenti non c'è telemetria da guardare.
-- [ ] **[S] Configurare il CORS** con l'origine della Static Web App (D12). Può aspettare la Fase 6.
+- [x] **[M] Pipeline GitHub Actions** con OIDC federato, `workflow_dispatch` (D13, D40, D41). Role assignment fatto da Matteo, credenziale federata corretta per il formato "immutable subject" di GitHub (D41), primo deploy riuscito e verificato in modo indipendente.
+- [x] **[M] Deploy della function Python e prima chiamata riuscita da internet.** `torinodotnet-python.azurewebsites.net`, verificato in modo indipendente dal workflow: `/api/images` con le tre immagini, `/api/resize?width=800` → `height: 690` come da formula D7.
+- [x] **[S] Controllo post-deploy integrato nel workflow stesso** (ultimo step di `.github/workflows/deploy.yml`): interroga `/api/images` con retry, fallisce se la lista è vuota. Verde al primo deploy vero.
+- [x] **[M] Sampling verificato sulla telemetria vera, non sulla config (D14, D41).** Burst di 20 richieste concorrenti, poi query su `AppRequests`: 21 righe, 21 `InvocationId` distinti, `ItemCount` sempre 1 su ogni riga — è il campo che segnala il fattore di sampling, e se fosse >1 vorrebbe dire eventi compressi/scartati.
 
 ## Fase 3 — Catena di misura
 
@@ -83,6 +82,7 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 - [ ] **[M] Static Web App** che mostra prima/dopo il resize usando `return=image`.
 - [ ] **[M] Decidere se punta a tutti e tre i backend** (selettore di linguaggio) o a uno solo. Non ancora deciso.
 - [ ] **[M] Selettore immagini** popolato dinamicamente da `GET /api/images` (D34) — mai hardcodare i nomi dei file, così cambiare il pool via redeploy aggiorna anche il frontend senza toccarlo.
+- [ ] **[S] Configurare il CORS** con l'origine della Static Web App (D12). Spostato da Fase 2: non serve finché la SWA non esiste.
 - [ ] **[M] CORS** verificato dal browser, non solo dalla configurazione.
 
 ## Fase 7 — Run finali e analisi
