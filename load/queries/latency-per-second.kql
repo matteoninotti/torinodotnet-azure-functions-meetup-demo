@@ -1,0 +1,32 @@
+// Metrica 3 — percentili di latenza secondo per secondo.
+//
+// E' la query che produce le tre curve sovrapposte: partendo da zero istanze,
+// come si comporta la latenza nei primi 60-120 secondi mentre la piattaforma
+// scala. La metrica derivata che interessa e' il time-to-steady-state, cioe'
+// quando la curva si appiattisce.
+//
+// Il conteggio dei fallimenti sta NELLA stessa riga dei percentili, non in una
+// query a parte, e non e' pedanteria (D45): sotto burst e' atteso che qualche
+// richiesta fallisca — app init che sfora i 30 secondi, throttling di
+// scale-out, tetto di istanze raggiunto. Un percentile calcolato solo sui
+// successi migliora proprio mentre il backend peggiora, perche' le richieste
+// peggiori spariscono dal campione invece di pesarci.
+
+let win_start = datetime(2026-09-10T16:03:50Z);
+let win_end   = datetime(2026-09-10T16:04:20Z);
+AppRequests
+| where TimeGenerated between (win_start .. win_end) and Name == 'resize'
+| summarize
+    requests   = count(),
+    ok         = countif(ResultCode == '200'),
+    failed     = countif(ResultCode != '200'),
+    p50_ms     = percentile(DurationMs, 50),
+    p95_ms     = percentile(DurationMs, 95),
+    max_ms     = max(DurationMs)
+  by bin(TimeGenerated, 1s)
+| extend success_pct = round(100.0 * ok / requests, 2),
+         // Secondi dall'inizio del run: rende le curve dei tre linguaggi
+         // sovrapponibili anche se i run sono stati fatti in momenti diversi.
+         t_sec = toint((TimeGenerated - win_start) / 1s)
+| project t_sec, TimeGenerated, requests, ok, failed, success_pct, p50_ms, p95_ms, max_ms
+| order by t_sec asc

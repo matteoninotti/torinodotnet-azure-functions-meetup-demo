@@ -1,0 +1,59 @@
+// Riepilogo di un run: percentili server-side, tempo di sola pipeline,
+// overhead di piattaforma e contabilita' dei fallimenti.
+//
+// Identica per i tre linguaggi: raggruppa per `language`, che arriva dal
+// payload di RESIZE_METRICS e non dal nome dell'app. Se un giorno si lanciasse
+// un run contro due backend insieme, questa query li separerebbe da sola.
+//
+// Le due datetime vanno sostituite con la finestra del run: k6 stampa
+// RUN_START e RUN_END in UTC proprio per questo. Il run non e' identificabile
+// dai parametri della richiesta, perche' l'host REDIGE la query string nella
+// telemetria (`?image=Redacted&width=Redacted`, D41) — la finestra temporale
+// e' l'unico modo di isolarlo.
+//
+// Attenzione all'ingestion: tra la fine di un run e la sua comparsa qui
+// passano 2-4 minuti. Una query lanciata subito restituisce meno righe di
+// quante ne siano davvero state servite.
+
+let win_start = datetime(2026-09-10T16:03:50Z);
+let win_end   = datetime(2026-09-10T16:04:20Z);
+let metrics = AppTraces
+| where TimeGenerated between (win_start .. win_end)
+| where Message startswith 'RESIZE_METRICS'
+// 'RESIZE_METRICS' e' lungo 14 caratteri, piu' lo spazio: il JSON parte da 15.
+| extend m = parse_json(substring(Message, 15))
+| project OperationId,
+          language = tostring(m.language),
+          image    = tostring(m.image),
+          n        = toint(m['count']),
+          total_ms = todouble(m.total_ms);
+AppRequests
+| where TimeGenerated between (win_start .. win_end) and Name == 'resize'
+// leftouter e NON inner: RESIZE_METRICS viene emesso solo dopo una pipeline
+// riuscita, quindi un inner join scarterebbe in silenzio ogni 4xx/5xx — cioe'
+// proprio le richieste che sotto burst interessano di piu' (D45).
+| join kind=leftouter metrics on OperationId
+| summarize
+    requests      = count(),
+    ok            = countif(ResultCode == '200'),
+    failed        = countif(ResultCode != '200'),
+    with_metrics  = countif(isnotnull(total_ms)),
+    p50_server_ms = percentile(DurationMs, 50),
+    p95_server_ms = percentile(DurationMs, 95),
+    p99_server_ms = percentile(DurationMs, 99),
+    p50_total_ms  = percentile(total_ms, 50),
+    p95_total_ms  = percentile(total_ms, 95),
+    // Se il sampling fosse acceso questo sarebbe > 1 su almeno una riga: e' il
+    // campo con cui Application Insights dichiara il fattore di sampling, piu'
+    // diretto che contare le righe (D14, D41). Va guardato a ogni run, non una
+    // volta sola: un p95 su un campione non uniforme non e' un p95.
+    sampling_max  = max(ItemCount)
+  by language = coalesce(language, 'n/d')
+| extend success_pct     = round(100.0 * ok / requests, 2),
+         // La differenza tra durata server-side e cronometro interno: overhead
+         // host-worker piu' piattaforma. E' la scomposizione che D25 prometteva
+         // di ricavare per sottrazione invece che con tre cronometri separati.
+         p50_overhead_ms = round(p50_server_ms - p50_total_ms, 2)
+| project language, requests, ok, failed, success_pct, with_metrics,
+          p50_total_ms, p50_server_ms, p50_overhead_ms,
+          p95_total_ms, p95_server_ms, p99_server_ms, sampling_max

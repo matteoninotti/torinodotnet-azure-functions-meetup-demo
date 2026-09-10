@@ -252,7 +252,7 @@ Carico a **tasso costante** (arrival rate) identico per i tre linguaggi, a regim
 **Strumento: script sequenziale + Application Insights.**
 
 1. Deploy una volta sola.
-2. Attendere che l'app scali a zero.
+2. Attendere che l'app scali a zero. **Misurato: ~3-4 minuti dall'ultima richiesta** (decision log D56) — ma è un *limite superiore*, perché la metrica `InstanceCount` ritarda e non separa la deallocazione reale dal ritardo di reporting. Regola operativa: aspettare **almeno 5 minuti** e **verificare lo zero dall'assenza di campioni**, non contando i minuti trascorsi. ⚠️ `InstanceCount` va interrogata con aggregazione **`Count`, non `Maximum`**: ogni istanza emette un campione di valore 1, quindi con `Maximum` il risultato è sempre `1.0` e sembra che l'app non scali mai (D55). **Costo di agenda da mettere in conto**: 10 ripetizioni × 3 linguaggi × ~5 minuti di attesa ≈ 2,5 ore di sola attesa.
 3. Inviare **una singola richiesta**, cronometrare la latenza client-side totale.
 4. Leggere in Application Insights la **durata server-side**.
 5. Differenza ≈ overhead di avvio (piattaforma + worker + runtime).
@@ -295,7 +295,7 @@ Tre formulazioni ufficiali convergono ma non chiudono la questione:
 1. App a zero istanze, nessun altro traffico.
 2. **Una sola richiesta**, con `count=N` tarato perché la durata superi 1.000 ms (così il minimo fatturabile non maschera il risultato).
 3. Da Application Insights: durata server-side `D` ms.
-4. Da Azure Monitor: `OnDemandFunctionExecutionUnits` in quel minuto, aggregazione Sum.
+4. Da Azure Monitor: `OnDemandFunctionExecutionUnits`, aggregazione Sum. ⚠️ **NON leggere "quel minuto": darebbe zero.** Verificato sul campo (decision log D60) che la metrica **ritarda di 1-2 minuti e si spalma su più minuti** — per un run girato alle 17:12:49-17:13:20 i minuti 17:12 e 17:13 riportavano `0` e il consumo compariva a 17:14 e 17:15. Va **sommata su una finestra** che parta dal minuto del run e arrivi ad almeno 3-4 minuti dopo, controllando che la coda sia tornata a zero prima di chiudere la somma.
 5. Se ≈ `2048 × D` → init **non** fatturato. Se ≈ `2048 × (D + cold start)` → init fatturato.
 6. Tre ripetizioni. Farlo su **Python**, che ha il cold start più lungo e quindi il segnale più forte.
 
@@ -409,7 +409,9 @@ Tutti da [Go developer reference](https://learn.microsoft.com/en-us/azure/azure-
 - **Go è in public preview**: risultati potenzialmente non rappresentativi della futura GA.
 - **.NET 10 invece di .NET 8**: deroga alla regola del realismo.
 - **Metrica 3**: non separa il contributo della piattaforma da quello del linguaggio.
-- **I percentili client-side sono latenza del backend vista da un client vicino, non da un utente reale.** Il generatore gira in un Container Apps Job nella stessa regione delle function: la latenza di rete è eliminata di proposito, perché è un offset costante e identico per i tre linguaggi e mascherare le differenze è tutto ciò che otterrebbe. Non vanno quindi letti come esperienza utente. Misura di riferimento: dal Mac lo stesso run dava un p50 client-side di 1,02 s contro 255 ms server-side.
+- **L'autoscaling penalizza due volte il linguaggio più lento, ed è dentro la misura.** Con concorrenza 1, un linguaggio più lento occupa ogni istanza più a lungo, quindi ne richiede — e ne fa nascere — di più, quindi paga più cold start. La **curva client-side della Metrica 3 misura quindi il sistema (linguaggio + piattaforma), non il linguaggio**: va formulata così, mai come "X è N volte più veloce sotto burst". Le affermazioni sul solo linguaggio si prendono dalla durata server-side a regime, che non include il provisioning. Dettagli nel decision log, D58.
+- **La riproducibilità della Metrica 3 è limitata per costruzione**: la documentazione ufficiale dichiara che la scale curve è gestita dalla piattaforma e che forma e ritmo [possono cambiare nel tempo](https://learn.microsoft.com/en-us/azure/azure-functions/flex-consumption-plan#how-the-scale-curve-works). I tre linguaggi vanno quindi misurati il più vicino possibile nel tempo, e i numeri valgono per quella finestra.
+- **I percentili client-side sono latenza del backend vista da un client vicino, non da un utente reale.** Il generatore gira in un Container Apps Job nella stessa regione delle function: la latenza di rete è eliminata di proposito, perché è un offset costante e identico per i tre linguaggi e mascherare le differenze è tutto ciò che otterrebbe. Non vanno quindi letti come esperienza utente. Ordine di grandezza di quel che si toglie: dal Mac verso Italy North il RTT misurato è ~34 ms, e l'apertura di una connessione HTTPS ~120 ms fra DNS, TCP e TLS.
 - **`count=N` non è un moltiplicatore lineare**: le prime iterazioni costano molto più delle successive (su Python, 72 ms la prima contro ~17 ms a regime). Il valore di `count` scelto decide se si misura il riscaldamento o la velocità a regime, e non è garantito che la curva abbia la stessa forma nei tre linguaggi.
 - **L'overhead host↔worker va riportato separando la prima richiesta di ogni istanza dalle successive**: su Python la prima costa ~206 ms e le successive ~7,5 ms. Un valore aggregato dipenderebbe da quante istanze sono state create durante il run, cioè dalla forma del carico, non dal linguaggio.
 - **Core allocati per instance size sono valori tipici**, non garantiti al singolo run.
@@ -442,11 +444,11 @@ Tutti da [Go developer reference](https://learn.microsoft.com/en-us/azure/azure-
 
 ## Punti ancora aperti
 1. **Il tempo di cold start / inizializzazione è fatturato?** → Metrica 4, sezione Metodologia di misurazione. Nessuna dichiarazione ufficiale esplicita; l'esperimento va eseguito.
-2. **Immagini di test**: risoluzione, numero, dimensione target del resize
-3. **`count=N`** da tarare per superare 1s con la più veloce
-4. **RPS target** per le Metriche 1 e 3
+2. ✅ **Immagini di test: scelte** (tre, decision log D33/D36). Restano fuori dal repo e vengono iniettate nel pacchetto a deploy-time.
+3. 🟡 **`count=N`: valore provvisorio 75**, tarato su Python (D49). Definitivo in Fase 7, quando esistono tutti e tre i worker: il criterio è che **la più veloce delle tre** superi 1s, e quale sia è uno dei risultati dell'esperimento. ⚠️ Scoperta collegata: `count` **non è un moltiplicatore lineare** — la prima iterazione costa ~4× quelle a regime.
+4. 🟡 **RPS target: provvisori 10 req/s per Metrica 1 e 50 req/s per Metrica 3**, entrambi misurati (D54, D57). Definitivi in Fase 7 per lo stesso motivo del punto 3.
 5. **URL da recuperare** e incollare inline: libjpeg-turbo SIMD, ImageSharp SIMD, licensing Six Labors, pricing Azure Load Testing, date di supporto .NET, filtri Pillow/ImageSharp
-6. Flag esatto per la dashboard web di k6, da verificare sulla versione installata
+6. 🟡 Flag della dashboard web di k6: su **k6 2.2.0** (la versione installata) `k6 run --help` non elenca nessun flag di dashboard e `K6_WEB_DASHBOARD=true` non produce output che la menzioni. ⚠️ **FONTE UFFICIALE NON TROVATA** per questa versione: non è chiaro se la funzione sia stata rimossa, spostata o rinominata. Resta aperto, ma è un `[C]`.
 7. **Smoke test preliminare del worker Go** al livello di carico scelto per i run finali. Essendo in public preview, eventuali errori sotto carico sarebbero un artefatto della preview, non una caratteristica di Go, e andrebbero dichiarati.
 
 ---
