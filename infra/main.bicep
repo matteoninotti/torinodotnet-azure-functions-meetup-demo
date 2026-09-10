@@ -36,10 +36,16 @@ param instanceMemoryMB int = 2048
 @description('Una richiesta per istanza: il parallelismo dev\'essere orizzontale, non interno.')
 param perInstanceConcurrency int = 1
 
-@description('Tetto di scale-out per il burst della Metrica 3.')
+// Con concorrenza a 1 ogni istanza serve una richiesta alla volta, quindi
+// questo numero E' il tetto delle richieste in volo, ed e' il tetto di quanti
+// cold start simultanei la Metrica 3 puo' forzare. A 2.048 MB un'istanza vale
+// 1 core, quindi 200 istanze = 200 core sui 250 della quota regionale (D42):
+// i 50 di margine servono a impedire che un burst mal dimensionato saturi la
+// quota della regione nel mezzo di un run (D46).
+@description('Tetto di scale-out per il burst della Metrica 3. 200 su 250 core di quota, con margine.')
 @minValue(40)
 @maxValue(1000)
-param maximumInstanceCount int = 100
+param maximumInstanceCount int = 200
 
 var deploymentContainerName = 'deployment-packages'
 
