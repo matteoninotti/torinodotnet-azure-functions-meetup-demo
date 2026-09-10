@@ -43,6 +43,12 @@ param maximumInstanceCount int = 100
 
 var deploymentContainerName = 'deployment-packages'
 
+// Container privato da cui la pipeline preleva le immagini di test prima del
+// build. E' la risposta al "come arrivano in CI" (D40): la pipeline si
+// autentica gia' su Azure via OIDC, quindi legge da qui senza nessun secret
+// aggiuntivo, e i file non passano mai dal repo.
+var testImagesContainerName = 'test-images'
+
 // --- Risorse condivise ------------------------------------------------------
 // Uno storage e una coppia Log Analytics/App Insights per tutti e tre i
 // worker. Il vincolo "una app per piano" riguarda il piano, non queste:
@@ -74,6 +80,11 @@ resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2023-05-01'
 resource deploymentContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
   parent: blobService
   name: deploymentContainerName
+}
+
+resource testImagesContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
+  parent: blobService
+  name: testImagesContainerName
 }
 
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
@@ -125,5 +136,6 @@ module worker 'worker.bicep' = [
 ]
 
 output storageAccountName string = storage.name
+output testImagesContainerName string = testImagesContainerName
 output applicationInsightsName string = applicationInsights.name
 output workerHostNames array = [for (w, i) in workers: worker[i].outputs.defaultHostName]
