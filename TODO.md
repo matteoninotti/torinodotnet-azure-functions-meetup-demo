@@ -54,8 +54,8 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 - [x] **[M] Script k6** con executor a arrival rate (`constant-arrival-rate`), parametri da variabile d'ambiente (D15).
 - [ ] **[M] Taratura provvisoria di `count=N` su Python** (D43). La taratura definitiva richiede tutti e tre i worker e vive in Fase 7: qui serve solo un valore che porti Python sopra 1s, abbastanza da esercitare la catena di misura end-to-end. Il valore va scritto nel log **come provvisorio**.
 - [ ] **[M] RPS target provvisorio** per Metrica 1 e Metrica 3 (D43), con lo stesso vincolo: definitivo in Fase 7. Il tetto di Metrica 3 è `maximumInstanceCount`, non l'RPS che si chiede a k6 — con concorrenza 1 il numero di istanze *è* il numero di richieste in volo.
-- [ ] **[M] Query di Log Analytics** per estrarre durata server-side e i tempi interni della function (D6), riusabili identiche per i tre linguaggi.
-- [ ] **[M] Contabilizzare i fallimenti nelle query, non solo i successi** (D45). `RESIZE_METRICS` è emesso solo dopo una pipeline riuscita: un 4xx/5xx lascia una riga in `AppRequests` senza traccia corrispondente, quindi la join li esclude in silenzio. Ogni query che produce percentili deve riportare accanto il conteggio per `ResultCode` e la percentuale di successo.
+- [x] **[M] Query di Log Analytics** per estrarre durata server-side e i tempi interni della function (D6), riusabili identiche per i tre linguaggi.
+- [x] **[M] Contabilizzare i fallimenti nelle query, non solo i successi** (D45). `RESIZE_METRICS` è emesso solo dopo una pipeline riuscita: un 4xx/5xx lascia una riga in `AppRequests` senza traccia corrispondente, quindi la join li esclude in silenzio. Ogni query che produce percentili deve riportare accanto il conteggio per `ResultCode` e la percentuale di successo.
 - [ ] **[M] Misurare il tempo di scale-to-zero** osservando `InstanceCount`, e scriverlo nel log (D16).
 - [ ] **[S] Container Apps Job con k6** per i run finali: `replicaRetryLimit` a 0, `replicaTimeout` dimensionato.
 
