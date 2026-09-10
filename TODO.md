@@ -51,7 +51,7 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 
 ## Fase 3 — Catena di misura
 
-- [ ] **[M] Script k6** con executor a arrival rate (`constant-arrival-rate`), parametri da variabile d'ambiente (D15).
+- [x] **[M] Script k6** con executor a arrival rate (`constant-arrival-rate`), parametri da variabile d'ambiente (D15).
 - [ ] **[M] Taratura provvisoria di `count=N` su Python** (D43). La taratura definitiva richiede tutti e tre i worker e vive in Fase 7: qui serve solo un valore che porti Python sopra 1s, abbastanza da esercitare la catena di misura end-to-end. Il valore va scritto nel log **come provvisorio**.
 - [ ] **[M] RPS target provvisorio** per Metrica 1 e Metrica 3 (D43), con lo stesso vincolo: definitivo in Fase 7. Il tetto di Metrica 3 è `maximumInstanceCount`, non l'RPS che si chiede a k6 — con concorrenza 1 il numero di istanze *è* il numero di richieste in volo.
 - [ ] **[M] Query di Log Analytics** per estrarre durata server-side e i tempi interni della function (D6), riusabili identiche per i tre linguaggi.
