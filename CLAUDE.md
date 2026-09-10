@@ -11,7 +11,7 @@ Demo + talk (45–60 min, pubblico IT professionale, meetup TorinoDotNet) che co
 
 > `<vault>` è la cartella `my_vault` sincronizzata su OneDrive, in locale sul Mac di Matteo. Il percorso assoluto non è scritto qui perché questo repo è pubblico: si risolve in locale, per esempio con `find ~/Library/CloudStorage -maxdepth 4 -type d -name my_vault`.
 
-- Appunti preparatori (stessa cartella nel vault): `scaletta - abstract - titolo.md`, `primi appunti wdavide_100726.md`, `secondi appunti.md`. Materiale grezzo, non autoritativo.
+- Appunti preparatori (stessa cartella nel vault): `scaletta - abstract - titolo - next prompt.md`, `primi appunti wdavide_100726.md`, `secondi appunti.md`. Materiale grezzo, non autoritativo.
 
 Se `instructions.md` e il log dicono cose diverse, **vince il log** — ed è il segnale che `instructions.md` va aggiornato.
 
@@ -33,6 +33,7 @@ Se `instructions.md` e il log dicono cose diverse, **vince il log** — ed è il
 - **Non hard-wrappare la prosa a metà frase** nei documenti. Si va a capo solo dove serve strutturalmente (fine periodo, elemento di lista, paragrafo nuovo). Le righe lunghe le manda a capo l'editor.
 - **Versioning = GitHub flow, un branch per fase.** Il codice di ogni fase sta su un branch che porta il suo nome (`phase-N`, allineato a `TODO.md`); si committa a ogni task completato o avanzato (test verdi + `TODO.md` sincronizzato nello stesso commit). A fase finita, merge su `main` con `git merge --no-ff`, così il confine della fase resta visibile nella storia. `main` resta sempre rilasciabile. Le modifiche di meta-progetto (CLAUDE.md, documentazione, guardrail) vanno **dritte su `main`**, non su un branch di fase. I task procedurali di **Fase 0** (account, MFA, budget alert, resource provider — cose fatte fuori dal codice) si committano sul branch `phase-0`, come qualsiasi altro task di fase: non vanno su `main`. Merge, push e cancellazione dei branch si fanno **solo su indicazione esplicita di Matteo** — mai push o delete non richiesti.
 - **Il deploy non parte da solo.** La pipeline è `workflow_dispatch`: un deploy involontario nel mezzo di un run di misura invalida la misura.
+- **Il deploy parte solo da `main` (D44).** La credenziale federata OIDC è registrata sul subject di `refs/heads/main` e su nessun altro ref: un `workflow_dispatch` lanciato da un branch di fase fallisce l'autenticazione. Per deployare il codice di una fase, prima si porta su `main` — con il merge esplicito richiesto dalla riga sopra.
 
 ## Fatti bloccati (dettagli e motivazioni nel log)
 

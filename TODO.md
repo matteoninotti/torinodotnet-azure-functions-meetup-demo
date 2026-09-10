@@ -52,9 +52,10 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 ## Fase 3 — Catena di misura
 
 - [ ] **[M] Script k6** con executor a arrival rate (`constant-arrival-rate`), parametri da variabile d'ambiente (D15).
-- [ ] **[M] Tarare `count=N`** perché la più veloce delle tre superi 1s, e **scrivere il valore nel log**.
-- [ ] **[M] Tarare l'RPS target** per Metrica 1 e Metrica 3.
+- [ ] **[M] Taratura provvisoria di `count=N` su Python** (D43). La taratura definitiva richiede tutti e tre i worker e vive in Fase 7: qui serve solo un valore che porti Python sopra 1s, abbastanza da esercitare la catena di misura end-to-end. Il valore va scritto nel log **come provvisorio**.
+- [ ] **[M] RPS target provvisorio** per Metrica 1 e Metrica 3 (D43), con lo stesso vincolo: definitivo in Fase 7. Il tetto di Metrica 3 è `maximumInstanceCount`, non l'RPS che si chiede a k6 — con concorrenza 1 il numero di istanze *è* il numero di richieste in volo.
 - [ ] **[M] Query di Log Analytics** per estrarre durata server-side e i tempi interni della function (D6), riusabili identiche per i tre linguaggi.
+- [ ] **[M] Contabilizzare i fallimenti nelle query, non solo i successi** (D45). `RESIZE_METRICS` è emesso solo dopo una pipeline riuscita: un 4xx/5xx lascia una riga in `AppRequests` senza traccia corrispondente, quindi la join li esclude in silenzio. Ogni query che produce percentili deve riportare accanto il conteggio per `ResultCode` e la percentuale di successo.
 - [ ] **[M] Misurare il tempo di scale-to-zero** osservando `InstanceCount`, e scriverlo nel log (D16).
 - [ ] **[S] Container Apps Job con k6** per i run finali: `replicaRetryLimit` a 0, `replicaTimeout` dimensionato.
 
@@ -87,6 +88,7 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 
 ## Fase 7 — Run finali e analisi
 
+- [ ] **[M] Taratura definitiva di `count=N` e dell'RPS target, con tutti e tre i worker deployati** (D43). Va fatta qui e non prima: `count` si dimensiona perché **la più veloce delle tre** superi 1s, e quale sia la più veloce non è deducibile — è uno dei risultati dell'esperimento. Sostituisce i valori provvisori di Fase 3; entrambi vanno scritti nel log, il provvisorio e il definitivo.
 - [ ] **[M] Metrica 1** — throughput a regime, tasso costante identico per i tre.
 - [ ] **[M] Metrica 2** — cold start isolato: 10 ripetizioni per linguaggio, mediana e p95 (**mai la media**).
 - [ ] **[M] Metrica 3** — cold start sotto burst, 3 ripetizioni per linguaggio, percentili secondo per secondo, curve sovrapposte.
