@@ -409,6 +409,9 @@ Tutti da [Go developer reference](https://learn.microsoft.com/en-us/azure/azure-
 - **Go è in public preview**: risultati potenzialmente non rappresentativi della futura GA.
 - **.NET 10 invece di .NET 8**: deroga alla regola del realismo.
 - **Metrica 3**: non separa il contributo della piattaforma da quello del linguaggio.
+- **I percentili client-side sono latenza del backend vista da un client vicino, non da un utente reale.** Il generatore gira in un Container Apps Job nella stessa regione delle function: la latenza di rete è eliminata di proposito, perché è un offset costante e identico per i tre linguaggi e mascherare le differenze è tutto ciò che otterrebbe. Non vanno quindi letti come esperienza utente. Misura di riferimento: dal Mac lo stesso run dava un p50 client-side di 1,02 s contro 255 ms server-side.
+- **`count=N` non è un moltiplicatore lineare**: le prime iterazioni costano molto più delle successive (su Python, 72 ms la prima contro ~17 ms a regime). Il valore di `count` scelto decide se si misura il riscaldamento o la velocità a regime, e non è garantito che la curva abbia la stessa forma nei tre linguaggi.
+- **L'overhead host↔worker va riportato separando la prima richiesta di ogni istanza dalle successive**: su Python la prima costa ~206 ms e le successive ~7,5 ms. Un valore aggregato dipenderebbe da quante istanze sono state create durante il run, cioè dalla forma del carico, non dal linguaggio.
 - **Core allocati per instance size sono valori tipici**, non garantiti al singolo run.
 - La scelta della libreria fa parte del "costo del linguaggio", ma non è il linguaggio.
 
