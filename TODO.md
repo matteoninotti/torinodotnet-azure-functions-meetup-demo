@@ -38,12 +38,14 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 
 ## Fase 2 — Infrastruttura Bicep e primo deploy ⏳ in corso
 
-- [ ] **[M] Bicep** (D20): resource group, storage account, piano Flex + function app Python, Application Insights + Log Analytics.
+- [ ] **[M] Bicep** (D20): resource group, storage account, piano Flex + function app Python, Application Insights + Log Analytics. **I parametri bloccati vanno scritti espliciti, non lasciati al default**: instance size **2.048 MB**, runtime **Python 3.12**, regione **Italy North**. Un default diverso non fa fallire niente, si scopre solo quando i numeri non tornano.
+- [ ] **[M] Scrivere il Bicep parametrico sul linguaggio fin da subito**, anche se in Fase 2 se ne istanzia uno solo. Su Flex vale **una sola app per piano** (`instructions.md`, § Considerations): i tre worker richiedono **tre piani e tre function app**, non tre app sullo stesso piano. Un modulo che prende il linguaggio come parametro si istanzia tre volte in Fase 4 e 5 senza riscritture; un Bicep monolitico su Python andrebbe rifatto. Lo storage account può invece restare **condiviso** — il vincolo riguarda il piano, non lo storage (verificato coi due probe di Fase 0, che condividevano `sttorinogo92557`).
 - [ ] **[M] Impostare la HTTP trigger concurrency a 1** via Azure CLI (D22). **Non è opzionale e non si fa in `host.json`**: a 2.048 MB il default è 16 per .NET e Go e 1 per Python — lasciarlo così renderebbe il confronto privo di significato.
+- [ ] **[M] Verificare che la concorrenza sia davvero applicata**, rileggendola dall'app e non dando per riuscito il comando (D22). Va fatto **prima del primo run buono, non dopo** — e ripetuto dopo ogni re-provisioning, perché ricreare l'app la riporta silenziosamente a 16.
 - [ ] **[S] Controllare la quota regionale di core effettiva**, ora che l'app Python esiste: portale → app → "Diagnose and solve problems" → "Flex Consumption Quota" (D29 — nessun comando `az` la espone prima che un'app esista). Se bassa, ridimensionare l'RPS target della Metrica 3 e dichiararlo.
 - [ ] **[M] Verificare che il sampling sia davvero spento** guardando la telemetria, non il file di configurazione (D14).
 - [ ] **[S] Decidere come le immagini arrivano in `functions/images/` in CI**: secret di GitHub Actions vs artifact vs storage privato. Problema separato da `sync-images.sh`, che legge dalla sorgente e basta — non si occupa di come ci è arrivata.
-- [ ] **[M] Pipeline GitHub Actions** con OIDC federato, `workflow_dispatch` (D13). Richiede un'app registration su Entra ID.
+- [ ] **[M] Pipeline GitHub Actions** con OIDC federato, `workflow_dispatch` (D13). Richiede un'app registration su Entra ID. **Deve chiamare `./scripts/sync-images.sh <linguaggio>` prima del publish** (D36): è il passo che porta le immagini nel pacchetto, e senza di lui il deploy riesce con un'app muta.
 - [ ] **[M] Deploy della function Python** e prima chiamata riuscita da internet.
 - [ ] **[S] Controllo post-deploy: `GET /api/images` non deve restituire lista vuota.** Una copia dimenticata **non** fa fallire il deploy — l'app parte lo stesso con zero immagini e risponde 404 su tutto. È voluto, ma va intercettato guardando, non sperando.
 - [ ] **[S] Configurare il CORS** con l'origine della Static Web App (D12). Può aspettare la Fase 6.
@@ -61,6 +63,7 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 
 - [ ] **[M] Implementazione** isolated worker .NET 10 con ImageSharp, contratto identico, `Compand = false` (D10), subsampling 4:2:0 esplicito (D8), stesso filtro (D9), stessa formula dell'altezza verificata contro `shared/conformance/` (D7).
 - [ ] **[M] Tre endpoint, non uno**: `resize`, `health` e `images` (D34) — il contratto dev'essere identico nei tre linguaggi, altrimenti il frontend funziona con un backend e non con gli altri.
+- [ ] **[M] Istanziare il modulo Bicep per .NET**: piano Flex dedicato + function app, `--runtime dotnet-isolated`, stessa instance size e stessa regione. Piano dedicato perché su Flex vale una sola app per piano.
 - [ ] **[M] Concorrenza a 1** su questa app (D22).
 - [ ] **[S] ReadyToRun come flag di CI**, non nel `.csproj` (D11). **Timebox: 30 minuti.** Se resiste, si toglie e si dichiara nelle limitazioni.
 - [ ] **[S] Verificare il default di `ResizeOptions.Compand`** sulla doc Six Labors.
@@ -70,6 +73,8 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 - [ ] **[M] Implementazione** con `golang.org/x/image/draw` + `image/jpeg`, `BiLinear` (**non** `ApproxBiLinear`, D9), contratto identico, formula dell'altezza verificata contro `shared/conformance/`.
 - [ ] **[M] Tre endpoint, non uno**: `resize`, `health` e `images` (D34), stesso contratto degli altri due worker.
 - [ ] **[M] Build**: `CGO_ENABLED=0 GOOS=linux GOARCH=amd64`, compilazione in CI (Oryx non supportato per Go).
+- [ ] **[M] Istanziare il modulo Bicep per Go**: piano Flex dedicato + function app, `--runtime go --runtime-version 1.0`, stessa instance size e stessa regione.
+- [ ] **[M] Disabilitare HTTP/2 sulla function app Go** (D31): `az resource update --resource-type Microsoft.Web/sites --set properties.siteConfig.http20Enabled=false`. È **richiesto durante la public preview** e non compare tra le "Known limitations" della reference — sta solo nella quickstart CLI, quindi è facile non trovarlo. Il probe di Fase 0 ha funzionato **con** questo passo eseguito.
 - [ ] **[M] Concorrenza a 1** su questa app (D22).
 - [ ] **[M] Smoke test sotto il carico dei run finali.** Se cede, è un artefatto della preview e non una caratteristica di Go — e va detto così in slide.
 
