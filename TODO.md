@@ -52,12 +52,12 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 ## Fase 3 — Catena di misura
 
 - [x] **[M] Script k6** con executor a arrival rate (`constant-arrival-rate`), parametri da variabile d'ambiente (D15).
-- [ ] **[M] Taratura provvisoria di `count=N` su Python** (D43). La taratura definitiva richiede tutti e tre i worker e vive in Fase 7: qui serve solo un valore che porti Python sopra 1s, abbastanza da esercitare la catena di misura end-to-end. Il valore va scritto nel log **come provvisorio**.
+- [x] **[M] Taratura provvisoria di `count=N` su Python: `count = 75`** (D43, D49). Oltre 1s con margine (`total_ms` 1.195-1.310 ms su 5 ripetizioni) e nella zona piatta della curva, dove il costo per iterazione ha smesso di calare. ⚠️ `count` **non è un moltiplicatore lineare** (D49): la prima iterazione costa 72 ms, il regime 17 ms. La taratura definitiva richiede tutti e tre i worker e vive in Fase 7: qui serve solo un valore che porti Python sopra 1s, abbastanza da esercitare la catena di misura end-to-end. Il valore va scritto nel log **come provvisorio**.
 - [ ] **[M] RPS target provvisorio** per Metrica 1 e Metrica 3 (D43), con lo stesso vincolo: definitivo in Fase 7. Il tetto di Metrica 3 è `maximumInstanceCount`, non l'RPS che si chiede a k6 — con concorrenza 1 il numero di istanze *è* il numero di richieste in volo.
 - [x] **[M] Query di Log Analytics** per estrarre durata server-side e i tempi interni della function (D6), riusabili identiche per i tre linguaggi.
 - [x] **[M] Contabilizzare i fallimenti nelle query, non solo i successi** (D45). `RESIZE_METRICS` è emesso solo dopo una pipeline riuscita: un 4xx/5xx lascia una riga in `AppRequests` senza traccia corrispondente, quindi la join li esclude in silenzio. Ogni query che produce percentili deve riportare accanto il conteggio per `ResultCode` e la percentuale di successo.
 - [ ] **[M] Misurare il tempo di scale-to-zero** osservando `InstanceCount`, e scriverlo nel log (D16).
-- [ ] **[S] Container Apps Job con k6** per i run finali: `replicaRetryLimit` a 0, `replicaTimeout` dimensionato.
+- [ ] **[M] Container Apps Job con k6** per i run finali: `replicaRetryLimit` a 0, `replicaTimeout` dimensionato. **Promosso da `[S]` a `[M]` (D48)**: dal Mac il p50 client-side è 1,02 s contro 255 ms server-side — ~765 ms sono rete, quindi senza ACA Job la Metrica 1 perde la sua metà client-side e non c'è ripiego.
 
 ## Fase 4 — Worker .NET
 
