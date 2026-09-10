@@ -35,8 +35,7 @@ node_modules/
 load/output/
 
 # Immagini di test: restano solo in locale e vengono iniettate nel pacchetto
-# a deploy-time (D33). Se finissero qui dentro tracciate, arriverebbero su
-# GitHub e l'iniezione in pre-build non avrebbe piu' senso.
+# a deploy-time (D33).
 #
 # functions/images/ e' la sorgente unica su cui si lavora; le tre cartelle
 # per linguaggio sono destinazioni popolate copiando da li' prima del build,
@@ -50,7 +49,7 @@ functions/dotnet/images/*
 functions/go/images/*
 !functions/go/images/README.md
 
-# Candidate scartate/in valutazione: stesso materiale, stesso motivo
+# Candidate scartate o in valutazione: restano locali come le altre
 meme-candidates/
 
 # macOS
