@@ -45,9 +45,9 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 - [ ] **[S] Controllare la quota regionale di core effettiva**, ora che l'app Python esiste: portale → app → "Diagnose and solve problems" → "Flex Consumption Quota" (D29 — nessun comando `az` la espone prima che un'app esista). Se bassa, ridimensionare l'RPS target della Metrica 3 e dichiararlo.
 - [x] **[S] Come le immagini arrivano in CI: container privato nello stesso storage account (D40).** La pipeline è già autenticata su Azure via OIDC, quindi le scarica da lì senza nessun secret aggiuntivo. Scartato il secret di GitHub: le tre immagini in base64 superano il limite di 64 KB per secret.
 - [ ] **[M] Pipeline GitHub Actions** con OIDC federato, `workflow_dispatch` (D13). Workflow scritto (`.github/workflows/deploy.yml`), app registration e credenziale federata create, variabili impostate sul repo. **Manca solo il role assignment RBAC**, bloccato dal classificatore: va lanciato da Matteo (comando in D40). Finché non c'è, il login OIDC della pipeline fallisce.
-- [ ] **[M] Deploy della function Python** e prima chiamata riuscita da internet.
-- [ ] **[S] Controllo post-deploy: `GET /api/images` non deve restituire lista vuota.** Una copia dimenticata **non** fa fallire il deploy — l'app parte lo stesso con zero immagini e risponde 404 su tutto. È voluto, ma va intercettato guardando, non sperando.
-- [ ] **[M] Verificare che il sampling sia davvero spento** guardando la telemetria, non il file di configurazione (D14). **Va qui e non prima**: serve un'app deployata che abbia già servito richieste, altrimenti non c'è telemetria da guardare.
+- [x] **[M] Deploy della function Python e prima chiamata riuscita da internet.** `torinodotnet-python.azurewebsites.net`, verificato in modo indipendente dal workflow: `/api/images` con le tre immagini, `/api/resize?width=800` → `height: 690` come da formula D7.
+- [x] **[S] Controllo post-deploy integrato nel workflow stesso** (ultimo step di `.github/workflows/deploy.yml`): interroga `/api/images` con retry, fallisce se la lista è vuota. Verde al primo deploy vero.
+- [x] **[M] Sampling verificato sulla telemetria vera, non sulla config (D14, D41).** Burst di 20 richieste concorrenti, poi query su `AppRequests`: 21 righe, 21 `InvocationId` distinti, `ItemCount` sempre 1 su ogni riga — è il campo che segnala il fattore di sampling, e se fosse >1 vorrebbe dire eventi compressi/scartati.
 - [ ] **[S] Configurare il CORS** con l'origine della Static Web App (D12). Può aspettare la Fase 6.
 
 ## Fase 3 — Catena di misura
