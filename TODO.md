@@ -49,7 +49,7 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 - [x] **[S] Controllo post-deploy integrato nel workflow stesso** (ultimo step di `.github/workflows/deploy.yml`): interroga `/api/images` con retry, fallisce se la lista è vuota. Verde al primo deploy vero.
 - [x] **[M] Sampling verificato sulla telemetria vera, non sulla config (D14, D41).** Burst di 20 richieste concorrenti, poi query su `AppRequests`: 21 righe, 21 `InvocationId` distinti, `ItemCount` sempre 1 su ogni riga — è il campo che segnala il fattore di sampling, e se fosse >1 vorrebbe dire eventi compressi/scartati.
 
-## Fase 3 — Catena di misura
+## Fase 3 — Catena di misura ✅ completata
 
 - [x] **[M] Script k6** con executor a arrival rate (`constant-arrival-rate`), parametri da variabile d'ambiente (D15).
 - [x] **[M] Taratura provvisoria di `count=N` su Python: `count = 75`** (D43, D49). Oltre 1s con margine (`total_ms` 1.195-1.310 ms su 5 ripetizioni) e nella zona piatta della curva, dove il costo per iterazione ha smesso di calare. ⚠️ `count` **non è un moltiplicatore lineare** (D49): la prima iterazione costa 72 ms, il regime 17 ms. La taratura definitiva richiede tutti e tre i worker e vive in Fase 7: qui serve solo un valore che porti Python sopra 1s, abbastanza da esercitare la catena di misura end-to-end. Il valore va scritto nel log **come provvisorio**.
@@ -58,7 +58,7 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 - [x] **[M] Contabilizzare i fallimenti nelle query, non solo i successi** (D45). `RESIZE_METRICS` è emesso solo dopo una pipeline riuscita: un 4xx/5xx lascia una riga in `AppRequests` senza traccia corrispondente, quindi la join li esclude in silenzio. Ogni query che produce percentili deve riportare accanto il conteggio per `ResultCode` e la percentuale di successo.
 - [x] **[M] Misurare il tempo di scale-to-zero**: **~3-4 minuti** dall'ultima richiesta, da usare come **limite superiore** perché la metrica stessa ritarda (D16, D56). Regola operativa: prima di una misura che presuppone zero istanze, aspettare ≥5 minuti **e verificare l'assenza di campioni**, non contare i minuti. ⚠️ `InstanceCount` va interrogata con **aggregazione `Count`, non `Maximum`** (D55): ogni istanza emette un campione di valore 1 ogni 30 s, quindi con `Maximum` il risultato è sempre `1.0` e sembra che l'app non scali mai. Serve un protocollo pulito: app a zero verificata, carico noto, stop netto, poi polling fino alla scomparsa dei campioni.
 
-## Fase 4 — Worker .NET
+## Fase 4 — Worker .NET ⏳ in corso
 
 - [ ] **[M] Implementazione** isolated worker .NET 10 con ImageSharp, contratto identico, `Compand = false` (D10), subsampling 4:2:0 esplicito (D8), stesso filtro (D9), stessa formula dell'altezza verificata contro `shared/conformance/` (D7).
 - [ ] **[M] Tre endpoint, non uno**: `resize`, `health` e `images` (D34) — il contratto dev'essere identico nei tre linguaggi, altrimenti il frontend funziona con un backend e non con gli altri.
