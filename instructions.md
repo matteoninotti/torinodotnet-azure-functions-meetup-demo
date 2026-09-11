@@ -116,7 +116,7 @@ Trigger disponibili per il worker Go: HTTP, Timer, Service Bus, Event Hubs, Even
 POST /api/resize?image=sample.jpg&count=N&width=800&quality=80
 ```
 
-- **Immagini di test incluse nel pacchetto di deploy**, committate nel repo, caricate in memoria una volta al cold start.
+- **Immagini di test incluse nel pacchetto di deploy**, iniettate a deploy-time e non committate nel repo, caricate in memoria una volta al cold start.
 - **Poche immagini (2–3, pochi MB totali), identiche in tutti e tre i deploy**, così l'offset sul peso del pacchetto è costante.
 - **Risposta di default = JSON** (dimensioni output, byte, hash). `&return=image` per la demo visiva, **mai durante i run di misura**.
 
@@ -136,8 +136,8 @@ POST /api/resize?image=sample.jpg&count=N&width=800&quality=80
 | Formato output | **JPEG** | Vedi sotto |
 | Qualità JPEG | **80** (mai ≥ 98) | Trappola SIMD, vedi Gotchas |
 | Filtro resampling | **Bilineare** | Unico filtro presente in tutti e tre |
-| Immagini di test | **TBD** | Da tarare col codice |
-| `count=N` | **TBD** | Deve portare anche la più veloce sopra 1s |
+| Immagini di test | **tre JPEG**, iniettate a deploy-time | Scelte in Fase 1 (D33, D36); l'elenco vive in `GET /api/images`, non qui |
+| `count=N` | **provvisorio: 75** | Deve portare anche la più veloce sopra 1s: taratura definitiva in Fase 7, coi tre worker (D43, D49) |
 
 **Perché JPEG e non PNG.** Nessuno dei due elimina l'asimmetria nativo/managed, la sposta soltanto: con JPEG è sul codec, con PNG sulla compressione DEFLATE. Si sceglie JPEG perché è ciò che fa realmente un image-CDN su foto, perché il lavoro CPU è genuinamente image-specific (DCT, quantizzazione, Huffman) invece che compressione generica, e perché l'asimmetria è documentabile.
 

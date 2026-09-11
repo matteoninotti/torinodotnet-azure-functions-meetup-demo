@@ -1,6 +1,6 @@
 # TODO
 
-**Scadenza: 30 settembre 2026, Toolbox Torino** (D21). Aggiornato: 2026-09-08.
+**Scadenza: 30 settembre 2026, Toolbox Torino** (D21).
 
 Ogni fase corrisponde a un branch `phase-N`. Si spunta nello **stesso commit** che completa il task. `D#` rimanda al decision log nel vault.
 
