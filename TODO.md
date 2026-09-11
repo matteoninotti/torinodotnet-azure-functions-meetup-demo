@@ -64,8 +64,10 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 - [ ] **[M] Tre endpoint, non uno**: `resize`, `health` e `images` (D34) — il contratto dev'essere identico nei tre linguaggi, altrimenti il frontend funziona con un backend e non con gli altri.
 - [ ] **[M] Istanziare il modulo Bicep per .NET**: piano Flex dedicato + function app, `--runtime dotnet-isolated`, stessa instance size e stessa regione. Piano dedicato perché su Flex vale una sola app per piano.
 - [ ] **[M] Concorrenza a 1** su questa app (D22).
-- [ ] **[S] ReadyToRun come flag di CI**, non nel `.csproj` (D11). **Timebox: 30 minuti.** Se resiste, si toglie e si dichiara nelle limitazioni.
-- [ ] **[S] Verificare il default di `ResizeOptions.Compand`** sulla doc Six Labors.
+- [ ] **[M] Percorso di build .NET nella pipeline** (D63). Il workflow oggi fa `remote-build: true` su `functions/<linguaggio>` per tutti e tre: per .NET non basta. Serve uno step `dotnet publish` condizionale, il `package:` che punta all'output di publish, e le immagini dichiarate come content del `.csproj` con `CopyToOutputDirectory` — altrimenti `sync-images.sh` le copia in una cartella che nel pacchetto non finisce, e l'app risponde `404` su tutto senza che il deploy fallisca (D35). `sync-images.sh` va eseguito **prima** del publish.
+- [ ] **[M] Telemetria simmetrica ai tre worker** (D64). I log del worker isolated restano quelli **relayed through the host**, cioe' il default: niente integrazione diretta con Application Insights, niente `telemetryMode: OpenTelemetry`. E' l'unica configurazione in cui `host.json` governa il sampling come per Python (D14). Da verificare **sulla telemetria vera** col metodo di D41 (burst + `ItemCount`), non sulla configurazione, e controllando che `RESIZE_METRICS` arrivi in `AppTraces` nella forma che `run-summary.kql` si aspetta.
+- [ ] **[S] ReadyToRun come flag di CI**, non nel `.csproj` (D11). **Timebox: 30 minuti**, da spendere **dopo** che il worker e' deployato e verde senza R2R (D65). Se resiste, si toglie e si dichiara nelle limitazioni.
+- [x] **[S] Verificato il default di `ResizeOptions.Compand`: `false`** — e con lui gli altri default che contano (D66). Sorgente ImageSharp v4.1.1: `Compand` non ha inizializzatore, quindi D10 chiede cio' che gia' succede; ma `Sampler` default e' **Bicubic** (non Triangle) e `JpegEncoder.ColorType`, se non impostato, **eredita il sottocampionamento dell'immagine sorgente**. Vanno passati tutti espliciti.
 
 ## Fase 5 — Worker Go
 
