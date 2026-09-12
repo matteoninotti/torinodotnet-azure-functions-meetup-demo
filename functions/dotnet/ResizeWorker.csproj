@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AzureFunctionsVersion>v4</AzureFunctionsVersion>
+    <OutputType>Exe</OutputType>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>ResizeWorker</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.Azure.Functions.Worker" Version="2.52.0" />
+    <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Http.AspNetCore" Version="2.1.0" />
+    <PackageReference Include="Microsoft.Azure.Functions.Worker.Sdk" Version="2.0.7" />
+    <!--
+      Pinnata come Pillow lo e' per Python: tra due versioni minori di una
+      libreria di image processing cambiano intrinsics, default dell'encoder e
+      ottimizzazioni del resampler. Un benchmark che gira su una versione
+      diversa a ogni deploy non dice a quale versione appartiene il numero.
+    -->
+    <PackageReference Include="SixLabors.ImageSharp" Version="4.1.1" />
+  </ItemGroup>
+
+  <!--
+    Il pacchetto di deploy di questo worker e' l'output di `dotnet publish`,
+    non la cartella del progetto: senza questa riga le immagini sincronizzate
+    in images/ non ci finiscono, il deploy riesce lo stesso e l'app risponde
+    404 su ogni richiesta. Il README resta fuori, non serve a runtime.
+  -->
+  <ItemGroup>
+    <Content Include="images\**" Exclude="images\README.md" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

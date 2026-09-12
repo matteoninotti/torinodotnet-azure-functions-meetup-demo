@@ -63,18 +63,52 @@ jobs:
       - name: Sincronizza le immagini nel worker
         run: ./scripts/sync-images.sh ${{ inputs.language }}
 
-      - name: Ricava il nome della function app
+      # --- .NET: build in CI, non da remoto ---------------------------------
+      # Oryx compilerebbe dal sorgente, e il flag ReadyToRun di D11/D24 vive
+      # sul comando di publish: da remoto non avrebbe dove stare. Le immagini
+      # entrano nell'output di publish grazie all'ItemGroup del .csproj, non
+      # perche' sono nella cartella del progetto.
+      - name: Installa .NET
+        if: inputs.language == 'dotnet'
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Test del worker .NET
+        if: inputs.language == 'dotnet'
+        run: dotnet test functions/dotnet-tests/ResizeWorker.Tests.csproj -c Release --nologo
+
+      - name: Publish del worker .NET
+        if: inputs.language == 'dotnet'
+        run: |
+          dotnet publish functions/dotnet/ResizeWorker.csproj \
+            -c Release -o "${{ runner.temp }}/publish" --nologo
+          test -n "$(find "${{ runner.temp }}/publish/images" -maxdepth 1 -type f 2>/dev/null)" || {
+            echo "Nessuna immagine nell'output di publish: l'app partirebbe rispondendo 404 su tutto." >&2
+            exit 1
+          }
+
+      - name: Ricava il nome della function app e il pacchetto
         id: app
-        run: echo "name=torinodotnet-${{ inputs.language }}" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "name=torinodotnet-${{ inputs.language }}" >> "$GITHUB_OUTPUT"
+          if [ "${{ inputs.language }}" = "dotnet" ]; then
+            echo "package=${{ runner.temp }}/publish" >> "$GITHUB_OUTPUT"
+            echo "remote_build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "package=functions/${{ inputs.language }}" >> "$GITHUB_OUTPUT"
+            echo "remote_build=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Deploy
         uses: Azure/functions-action@v1
         with:
           app-name: ${{ steps.app.outputs.name }}
-          package: functions/${{ inputs.language }}
+          package: ${{ steps.app.outputs.package }}
           # Su Flex il build remoto e' sempre Oryx: non vanno impostati
-          # scm-do-build-during-deployment ne' enable-oryx-build.
-          remote-build: true
+          # scm-do-build-during-deployment ne' enable-oryx-build. Per .NET e'
+          # spento: si deploya un artefatto gia' costruito.
+          remote-build: ${{ steps.app.outputs.remote_build }}
 
       # Una copia dimenticata non fa fallire il deploy: l'app parte lo stesso
       # e risponde 404 su tutto. Qui si guarda invece di sperare (D35).
