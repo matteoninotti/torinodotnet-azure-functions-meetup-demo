@@ -16,12 +16,28 @@ param namePrefix string = 'torinodotnet'
 @description('Regione. Deve supportare Flex Consumption: az functionapp list-flexconsumption-locations')
 param location string = 'italynorth'
 
-@description('Linguaggi da istanziare. In Fase 2 solo python; .NET e Go si aggiungono in Fase 4 e 5.')
+// I worker stanno nel default e non in un parametro passato di volta in volta:
+// ogni deploy riafferma cosi' TUTTI i piani e TUTTE le app gia' costruite, e
+// con loro la concorrenza a 1 (D39). Passarli a mano significherebbe riaffermare
+// solo quelli che ci si ricorda di elencare — e un'app tornata al default di 16
+// non fallisce rumorosamente, falsifica i numeri in silenzio (D22).
+// Conseguenza da conoscere: un deploy del Bicep scrive anche sulle app che non
+// stai cambiando, quindi non va lanciato durante un run di misura.
+@description('Linguaggi da istanziare. Go si aggiunge in Fase 5.')
 param workers array = [
   {
     language: 'python'
     runtimeName: 'python'
     runtimeVersion: '3.12'
+  }
+  {
+    // Valori verificati con `az functionapp list-flexconsumption-runtimes
+    // --location italynorth --runtime dotnet-isolated`: la versione e' '10',
+    // non '10.0'. Lo stesso comando restituisce '3.12' per Python, cioe' la
+    // stessa stringa che sta gia' qui sopra.
+    language: 'dotnet'
+    runtimeName: 'dotnet-isolated'
+    runtimeVersion: '10'
   }
 ]
 

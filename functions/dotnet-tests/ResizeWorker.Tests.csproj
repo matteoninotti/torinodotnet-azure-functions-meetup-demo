@@ -1,0 +1,58 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Progetto sorella, non sottocartella di functions/dotnet/: un secondo .csproj
+    dentro l'albero del progetto dell'app verrebbe agganciato dal globbing di
+    default di MSBuild. In Python i test stanno dentro il worker ed escono dal
+    pacchetto con una riga di .funcignore; qui il vincolo e' di compilazione,
+    non di packaging, e la cartella sorella e' l'unico modo che non obbliga a
+    toccare sync-images.sh, il workflow e le regole di .gitignore (D68).
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>ResizeWorker.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\dotnet\ResizeWorker.csproj" />
+  </ItemGroup>
+
+  <!--
+    Lo stesso file di casi che leggono i test Python: linkato, non copiato nel
+    repo. Una seconda copia sarebbe l'esatto contrario di cio' per cui il file
+    condiviso esiste (D23).
+  -->
+  <ItemGroup>
+    <Content Include="..\..\shared\conformance\height_cases.json"
+             Link="height_cases.json"
+             CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!--
+    Le immagini di test arrivano dalla destinazione del worker, popolata da
+    scripts/sync-images.sh. Se non e' stato lanciato la cartella e' vuota e i
+    test che ne hanno bisogno si saltano, esattamente come in Python.
+  -->
+  <ItemGroup>
+    <Content Include="..\dotnet\images\**"
+             Exclude="..\dotnet\images\README.md"
+             Link="images\%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>
