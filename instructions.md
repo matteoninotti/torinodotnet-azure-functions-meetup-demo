@@ -167,7 +167,9 @@ POST /api/resize?image=sample.jpg&count=N&width=800&quality=80
 ### Talking point sul licensing
 Da ImageSharp v3.0.0 la libreria non è più Apache 2.0 pura ma **Six Labors Split License**: serve una licenza commerciale *"when a Six Labors library is used as a direct package dependency in closed-source, for-profit software produced by a business earning more than 1M USD in annual gross revenue"* — fonte: [sixlabors.com/pricing](https://sixlabors.com/pricing/), verificata. Sotto soglia, per open source e per le organizzazioni no-profit non è richiesta.
 
-**Dettaglio concreto da mostrare, non solo da raccontare**: con la **4.1.1** ogni `dotnet build` stampa un warning — *"No Six Labors license found… Please obtain a license from https://sixlabors.com/pricing/"*. È solo un warning e il build passa, ma è la libreria stessa che lo ricorda a ogni compilazione. ⚠️ **DA VERIFICARE prima delle slide**: se il warning esista anche sulla 3.x o sia una novità della 4.x.
+**Dettaglio concreto, e non è un aneddoto: ci ha rotto la pipeline.** Dalla **4.x** ImageSharp controlla la licenza al momento del build. In `Debug` è un warning — *"No Six Labors license found… Please obtain a license from https://sixlabors.com/pricing/"* — e passa; in **`Release` è un errore, e il build fallisce**. Siccome l'artefatto che si deploya si costruisce in Release, con la 4.1.1 e senza una chiave di licenza **non si compila affatto**: il primo deploy del worker .NET si è fermato lì. Il progetto usa quindi la **3.1.12**, ultima della 3.x, che si compila in Release senza chiave.
+
+*Perché vale come contenuto e non come nota a piè di pagina*: è il caso concreto in cui il modello di licenza di una libreria smette di essere una questione legale e diventa un errore di build a diciotto giorni dal talk. La 3.x è coperta dalla stessa Split License, ma non applica il controllo.
 
 ---
 

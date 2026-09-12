@@ -19,8 +19,13 @@
       libreria di image processing cambiano intrinsics, default dell'encoder e
       ottimizzazioni del resampler. Un benchmark che gira su una versione
       diversa a ogni deploy non dice a quale versione appartiene il numero.
+
+      3.1.12 e non l'ultima 4.1.1: dalla 4.x il controllo di licenza Six Labors
+      e' un ERRORE di build in Release (in Debug e' solo un warning, che e' il
+      motivo per cui in locale non si era visto). Senza una chiave di licenza la
+      4.x non compila l'artefatto che si deploya.
     -->
-    <PackageReference Include="SixLabors.ImageSharp" Version="4.1.1" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
   </ItemGroup>
 
   <!--
