@@ -78,11 +78,21 @@ jobs:
         if: inputs.language == 'dotnet'
         run: dotnet test functions/dotnet-tests/ResizeWorker.Tests.csproj -c Release --nologo
 
+      # ReadyToRun sta QUI e non nel .csproj di proposito (D11, D24): e' la
+      # scelta idiomatica per cio' che si mette in produzione, ma il .csproj
+      # resta pulito e `func start` in locale continua a funzionare com'era.
+      # Richiede un publish RID-specific; --self-contained false tiene il
+      # pacchetto framework-dependent, perche' il runtime ce lo mette Flex.
+      # ⚠️ R2R raddoppia il pacchetto (5,9 -> 12,1 MB) e Flex lo scarica a
+      # ogni cold start: che il saldo sia positivo va MISURATO in Fase 7, non
+      # assunto.
       - name: Publish del worker .NET
         if: inputs.language == 'dotnet'
         run: |
           dotnet publish functions/dotnet/ResizeWorker.csproj \
-            -c Release -o "${{ runner.temp }}/publish" --nologo
+            -c Release -r linux-x64 --self-contained false \
+            -p:PublishReadyToRun=true \
+            -o "${{ runner.temp }}/publish" --nologo
           test -n "$(find "${{ runner.temp }}/publish/images" -maxdepth 1 -type f 2>/dev/null)" || {
             echo "Nessuna immagine nell'output di publish: l'app partirebbe rispondendo 404 su tutto." >&2
             exit 1
