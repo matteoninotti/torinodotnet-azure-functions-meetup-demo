@@ -1,0 +1,6 @@
+.git*
+.vscode
+local.settings.json
+local.settings.json.example
+*_test.go
+images/README.md

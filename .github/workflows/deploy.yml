@@ -98,17 +98,58 @@ jobs:
             exit 1
           }
 
+      # --- Go: binario statico costruito in CI ------------------------------
+      # Oryx non supporta Go, quindi il binario si compila qui. Il pacchetto si
+      # assembla a mano e NON con `func pack`: quel comando produce uno zip con
+      # dentro solo `app` e `host.json` — le immagini non ci entrano, e l'app
+      # partirebbe rispondendo 404 su tutto (D35, D86).
+      - name: Installa Go
+        if: inputs.language == 'go'
+        uses: actions/setup-go@v5
+        with:
+          # Versione esatta e non "1.27": la stdlib viaggia col compilatore, e
+          # `image/jpeg` E' la libreria che stiamo misurando.
+          go-version: "1.27.1"
+          cache-dependency-path: functions/go/go.sum
+
+      - name: Test del worker Go
+        if: inputs.language == 'go'
+        working-directory: functions/go
+        run: go test ./...
+
+      - name: Build del worker Go
+        if: inputs.language == 'go'
+        run: |
+          PKG="${{ runner.temp }}/go-package"
+          mkdir -p "$PKG/images"
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+            go build -C functions/go -o "$PKG/app" .
+          cp functions/go/host.json "$PKG/"
+          cp functions/go/images/*.jpg "$PKG/images/"
+          test -n "$(find "$PKG/images" -maxdepth 1 -type f)" || {
+            echo "Nessuna immagine nel pacchetto Go: l'app partirebbe rispondendo 404 su tutto." >&2
+            exit 1
+          }
+          ls -la "$PKG" "$PKG/images"
+
       - name: Ricava il nome della function app e il pacchetto
         id: app
         run: |
           echo "name=torinodotnet-${{ inputs.language }}" >> "$GITHUB_OUTPUT"
-          if [ "${{ inputs.language }}" = "dotnet" ]; then
-            echo "package=${{ runner.temp }}/publish" >> "$GITHUB_OUTPUT"
-            echo "remote_build=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "package=functions/${{ inputs.language }}" >> "$GITHUB_OUTPUT"
-            echo "remote_build=true" >> "$GITHUB_OUTPUT"
-          fi
+          case "${{ inputs.language }}" in
+            dotnet)
+              echo "package=${{ runner.temp }}/publish" >> "$GITHUB_OUTPUT"
+              echo "remote_build=false" >> "$GITHUB_OUTPUT"
+              ;;
+            go)
+              echo "package=${{ runner.temp }}/go-package" >> "$GITHUB_OUTPUT"
+              echo "remote_build=false" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "package=functions/${{ inputs.language }}" >> "$GITHUB_OUTPUT"
+              echo "remote_build=true" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
 
       - name: Deploy
         uses: Azure/functions-action@v1

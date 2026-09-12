@@ -73,12 +73,12 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 
 ## Fase 5 — Worker Go
 
-- [ ] **[M] Implementazione** con `golang.org/x/image/draw` + `image/jpeg`, `BiLinear` (**non** `ApproxBiLinear`, D9), contratto identico, formula dell'altezza verificata contro `shared/conformance/`.
-- [ ] **[M] Tre endpoint, non uno**: `resize`, `health` e `images` (D34), stesso contratto degli altri due worker.
-- [ ] **[M] Build**: `CGO_ENABLED=0 GOOS=linux GOARCH=amd64`, compilazione in CI (Oryx non supportato per Go).
-- [ ] **[M] Istanziare il modulo Bicep per Go**: piano Flex dedicato + function app, `--runtime go --runtime-version 1.0`, stessa instance size e stessa regione.
-- [ ] **[M] Disabilitare HTTP/2 sulla function app Go** (D31): `az resource update --resource-type Microsoft.Web/sites --set properties.siteConfig.http20Enabled=false`. È **richiesto durante la public preview** e non compare tra le "Known limitations" della reference — sta solo nella quickstart CLI, quindi è facile non trovarlo. Il probe di Fase 0 ha funzionato **con** questo passo eseguito.
-- [ ] **[M] Concorrenza a 1** su questa app (D22).
+- [x] **[M] Implementazione** con `golang.org/x/image/draw` + `image/jpeg` (D85). `BiLinear` e **non** `ApproxBiLinear` (D9), destinazione `image.RGBA` perche' il decoder restituisce YCbCr e interpolare li' non sarebbe quello che fanno gli altri due, formula dell'altezza verificata contro `shared/conformance/` — 11 test verdi, i 12 casi letti dal file condiviso. Toolchain Go **pinnata a 1.27.1**: in Go la libreria di codifica e' la stdlib, quindi il compilatore e' una dipendenza da pinnare come Pillow e ImageSharp.
+- [x] **[M] Tre endpoint, non uno**: `resize`, `health` e `images` (D34). Verificati con `func start` e non solo a unit test. Le tre immagini danno **690, 1005, 814** — le stesse altezze di Python e .NET; status code `400`/`404`/`400` e `return=image` con `image/jpeg` come negli altri due.
+- [ ] **[M] Build**: `CGO_ENABLED=0 GOOS=linux GOARCH=amd64`, compilazione in CI (Oryx non supportato per Go). ⏳ **Scritta**, con il pacchetto assemblato a mano e **non** con `func pack`, che produce uno zip contenente solo `app` e `host.json` — le immagini non ci entrano (D86). Resta `[ ]` finche' un deploy vero non la esercita.
+- [ ] **[M] Istanziare il modulo Bicep per Go**: piano Flex dedicato + function app, `runtime: {name: 'go', version: '1.0'}` letto dal campo ARM strutturato (D82, D85) — chiude il residuo di D39, che temeva servisse `custom`. ⏳ **Scritto e verificato con `what-if`** (`3 to create`, incluso `deployment-packages-go`), ma `az deployment group create` e' bloccato dal classificatore: **lo lancia Matteo**.
+- [ ] **[M] HTTP/2 disabilitato — dichiarato nel Bicep, non via CLI** (D31, D85). `siteConfig.http20Enabled: false` su **tutti e tre** i worker, non solo Go: e' richiesto dalla preview Go, e il protocollo di trasporto farebbe comunque parte di cio' che si confronta. Stesso ragionamento di D39: dichiarato nel Bicep, una re-provisioning lo ri-imposta. Da **rileggere dalla risorsa** dopo il deploy.
+- [ ] **[M] Concorrenza a 1** su questa app (D22). Dichiarata nel Bicep (D39): da rileggere dalla risorsa dopo il deploy, insieme a `http20Enabled`.
 - [ ] **[M] Smoke test sotto il carico dei run finali.** Se cede, è un artefatto della preview e non una caratteristica di Go — e va detto così in slide.
 
 ## Fase 6 — Frontend

@@ -22,6 +22,8 @@ venv/
 
 # Go
 /functions/go/bin/
+# pacchetto prodotto da `func pack`, rigenerabile
+/functions/go/*.zip
 
 # Node / frontend
 node_modules/

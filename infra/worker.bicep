@@ -60,6 +60,16 @@ resource app 'Microsoft.Web/sites@2024-04-01' = {
     serverFarmId: plan.id
     httpsOnly: true
     siteConfig: {
+      // HTTP/2 spento su TUTTI e tre i worker, non solo su Go. Per Go e'
+      // richiesto durante la public preview (D31): il passo compare solo nella
+      // quickstart CLI e non tra le "Known limitations" della reference, quindi
+      // e' facile non trovarlo. Metterlo qui invece che in un `az resource
+      // update` post-deploy e' lo stesso ragionamento di D39: dichiarato nel
+      // Bicep, una re-provisioning lo RI-imposta invece di riportarlo al
+      // default. E vale per tutti e tre perche' il protocollo di trasporto
+      // farebbe parte di cio' che si confronta: due worker su HTTP/2 e uno su
+      // HTTP/1.1 non sarebbero confrontabili.
+      http20Enabled: false
       appSettings: [
         {
           name: 'AzureWebJobsStorage'
