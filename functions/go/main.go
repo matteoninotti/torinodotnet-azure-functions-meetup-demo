@@ -114,9 +114,12 @@ func resizeHandler(w http.ResponseWriter, r *http.Request) {
 	payload, err := json.Marshal(measure)
 	if err == nil {
 		// slog.InfoContext e non log.Printf: e' il modo documentato di
-		// correlare una riga di log all'invocazione corrente, e il worker
-		// inoltra il messaggio all'host intatto, quindi la riga arriva in
-		// AppTraces nella stessa forma degli altri due worker.
+		// correlare una riga di log all'invocazione corrente, ed e' cio' che
+		// fa combaciare OperationId e ParentId con la riga di AppRequests.
+		// ⚠️ Il worker APPENDE gli attributi dell'invocazione in coda al
+		// messaggio (`... } trigger_type=httpTrigger`), quindi in AppTraces
+		// questa riga NON e' solo il JSON: la query lo estrae con una regex
+		// invece che a offset fisso (D87).
 		slog.InfoContext(r.Context(), metricsPrefix+" "+string(payload))
 	}
 
