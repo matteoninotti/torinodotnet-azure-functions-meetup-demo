@@ -230,13 +230,16 @@ public static class ResizeCore
             {
                 Quality = parameters.Quality,
 
-                // Senza questi tre, ImageSharp eredita sottocampionamento e
+                // Senza questi due, ImageSharp eredita sottocampionamento e
                 // modalita' di scansione DALL'IMMAGINE DI INPUT: cambiare
                 // un'immagine di test cambierebbe il formato dell'output senza
-                // toccare una riga di codice. 4:2:0 baseline interleaved e' il
-                // minimo comune denominatore imposto dalla stdlib Go (D8, D66).
-                ColorType = JpegColorType.YCbCrRatio420,
-                Progressive = false,
+                // toccare una riga di codice. 4:2:0 interleaved e' il minimo
+                // comune denominatore imposto dalla stdlib Go (D8, D66).
+                //
+                // Il terzo pezzo, baseline contro progressive, qui non e' una
+                // scelta: la 3.1.12 non ha una proprieta' Progressive, scrive
+                // sempre baseline. E' la 4.x ad averla aggiunta.
+                ColorType = JpegEncodingColor.YCbCrRatio420,
                 Interleaved = true,
             });
 
