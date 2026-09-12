@@ -31,13 +31,17 @@ param workers array = [
     runtimeVersion: '3.12'
   }
   {
-    // Valori verificati con `az functionapp list-flexconsumption-runtimes
-    // --location italynorth --runtime dotnet-isolated`: la versione e' '10',
-    // non '10.0'. Lo stesso comando restituisce '3.12' per Python, cioe' la
-    // stessa stringa che sta gia' qui sopra.
+    // ⚠️ '10.0', NON '10'. Il valore giusto e' quello che
+    // `az functionapp list-flexconsumption-runtimes --location italynorth
+    // --runtime dotnet-isolated` espone in
+    // sku.functionAppConfigProperties.runtime.version, non la colonna
+    // "Version" che stampa `-o table`: per dotnet-isolated le due differiscono
+    // ('10.0' contro '10'), per python coincidono. ARM accetta '10' senza
+    // protestare e lo rilegge identico, ma l'host non parte e non logga nulla
+    // (D82).
     language: 'dotnet'
     runtimeName: 'dotnet-isolated'
-    runtimeVersion: '10'
+    runtimeVersion: '10.0'
   }
 ]
 
