@@ -63,7 +63,12 @@ param perInstanceConcurrency int = 1
 @maxValue(1000)
 param maximumInstanceCount int = 200
 
-var deploymentContainerName = 'deployment-packages'
+// UN CONTAINER PER WORKER, non uno condiviso. Su Flex il pacchetto di deploy
+// e' un unico blob `released-package.zip` per container: due app che puntano
+// allo stesso container si sovrascrivono il pacchetto a vicenda, e la seconda
+// a deployare lascia la prima senza codice. Il sintomo non e' un errore di
+// deploy — e' l'app precedente che risponde 404 su ogni route (D78).
+var deploymentContainerPrefix = 'deployment-packages'
 
 // Container privato da cui la pipeline preleva le immagini di test prima del
 // build. E' la risposta al "come arrivano in CI" (D40): la pipeline si
@@ -99,10 +104,12 @@ resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2023-05-01'
   name: 'default'
 }
 
-resource deploymentContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
-  parent: blobService
-  name: deploymentContainerName
-}
+resource deploymentContainers 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = [
+  for w in workers: {
+    parent: blobService
+    name: '${deploymentContainerPrefix}-${w.language}'
+  }
+]
 
 resource testImagesContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
   parent: blobService
@@ -145,14 +152,14 @@ module worker 'worker.bicep' = [
       location: location
       namePrefix: namePrefix
       storageAccountName: storage.name
-      deploymentContainerName: deploymentContainerName
+      deploymentContainerName: '${deploymentContainerPrefix}-${w.language}'
       applicationInsightsConnectionString: applicationInsights.properties.ConnectionString
       instanceMemoryMB: instanceMemoryMB
       perInstanceConcurrency: perInstanceConcurrency
       maximumInstanceCount: maximumInstanceCount
     }
     dependsOn: [
-      deploymentContainer
+      deploymentContainers
     ]
   }
 ]
