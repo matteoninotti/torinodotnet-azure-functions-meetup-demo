@@ -20,8 +20,12 @@ let win_end   = datetime(2026-09-10T16:04:20Z);
 let metrics = AppTraces
 | where TimeGenerated between (win_start .. win_end)
 | where Message startswith 'RESIZE_METRICS'
-// 'RESIZE_METRICS' e' lungo 14 caratteri, piu' lo spazio: il JSON parte da 15.
-| extend m = parse_json(substring(Message, 15))
+// Il JSON si estrae con una regex e NON con substring(Message, 15), che pure
+// funzionava su Python e .NET: il worker Go APPENDE gli attributi
+// dell'invocazione in coda al messaggio (`... } trigger_type=httpTrigger`), e
+// quella coda faceva fallire parse_json in silenzio — righe presenti, campi
+// tutti null, percentili calcolati su zero valori (D87).
+| extend m = parse_json(extract(@'^RESIZE_METRICS (\{.*\})', 1, Message))
 | project OperationId,
           language = tostring(m.language),
           image    = tostring(m.image),
