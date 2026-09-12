@@ -31,6 +31,19 @@ param workers array = [
     runtimeVersion: '3.12'
   }
   {
+    // Go e' in public preview e NON compare nella tabella "Supported language
+    // stack versions" della pagina Flex; il valore ARM pero' esiste ed e'
+    // esposto da `az functionapp list-flexconsumption-runtimes --location
+    // italynorth --runtime go` in sku.functionAppConfigProperties.runtime:
+    // {name: 'go', version: '1.0'}. Chiude il residuo di D39, che temeva
+    // servisse 'custom': non serve. La '1.0' e' la versione dello stack del
+    // worker, non del linguaggio Go, che resta quella del compilatore usato in
+    // CI (D31).
+    language: 'go'
+    runtimeName: 'go'
+    runtimeVersion: '1.0'
+  }
+  {
     // ⚠️ '10.0', NON '10'. Il valore giusto e' quello che
     // `az functionapp list-flexconsumption-runtimes --location italynorth
     // --runtime dotnet-isolated` espone in
