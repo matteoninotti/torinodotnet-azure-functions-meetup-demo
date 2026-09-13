@@ -81,9 +81,9 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 - [x] **[M] Concorrenza a 1** su questa app (D22, D39). Riletta dalla risorsa: `perInstanceConcurrency: 1` su Go, e ancora `1` su Python e .NET dopo il re-provisioning.
 - [x] **[M] Deploy del worker Go e verifica indipendente dal workflow** (D87). `/api/images` le tre immagini coi byte esatti · `/api/health` → `runtime: go1.27.1` · le tre immagini danno **690, 1005, 814**, le stesse altezze di Python e .NET. Telemetria verificata sui dati veri: 23 richieste, 23 righe `RESIZE_METRICS`, `ItemCount` sempre 1, join di `run-summary.kql` che aggancia 23/23 — **dopo** aver corretto la query, che su Go falliva in silenzio (D87).
 
-## Fase 6 — Frontend
+## Fase 6 — Frontend ✅ completata
 
-- [x] **[M] Static Web App** in HTML + JS senza framework (D88), pubblicata e funzionante. ⚠️ Mostra il **dopo** e il peso prima→dopo, non l'immagine sorgente: per quella servirebbe un endpoint nuovo sui tre worker, ed è una decisione aperta (D95).
+- [x] **[M] Static Web App** in HTML + JS senza framework (D88), pubblicata e funzionante, con il **prima accanto al dopo**: `GET /api/source?image=<nome>` aggiunto ai tre worker restituisce i byte originali (D97, chiude D95). Quattro card affiancate — originale, Python, .NET, Go.
 - [x] **[M] Decidere se punta a tutti e tre i backend** (selettore di linguaggio) o a uno solo. ✅ Tutti e tre, con selettore di linguaggio (D88): il contratto è già identico sui tre worker, quindi il frontend cambia solo l'host della `fetch`.
 - [x] **[M] Selettore di linguaggio** che manda la stessa richiesta ai tre backend (D88). ✅ Esegue sui tre insieme e mostra i risultati affiancati, che dal vivo è più efficace di un selettore a scelta singola.
 - [x] **[M] Selettore immagini** popolato dinamicamente da `GET /api/images` (D34) — mai hardcodare i nomi dei file, così cambiare il pool via redeploy aggiorna anche il frontend senza toccarlo. ✅ Interroga tutti e tre i backend e offre solo i nomi presenti su tutti: un elenco divergente è un pacchetto di deploy incompleto e si vede subito.

@@ -11,6 +11,7 @@ Metriche e percentili **non** passano da qui: li producono il generatore di cari
 ## Come funziona
 
 - Il menu delle immagini si popola da `GET /api/images` (D34), interrogando **tutti e tre** i backend e offrendo solo i nomi presenti su tutti: un elenco divergente è un pacchetto di deploy partito senza le immagini, e va visto subito invece che scoprirlo con un 404 al primo resize.
+- L'originale arriva da `GET /api/source?image=<nome>` (vedi sotto).
 - Ogni esecuzione manda **due** richieste per backend: una senza `return` per le misure in JSON, una con `return=image&count=1` per il JPEG da mostrare. Due e non una perché il contratto risponde o l'uno o l'altro; `count=1` sull'immagine perché `count` è una manopola sul tempo e non sul risultato.
 
 ## Deploy
@@ -33,6 +34,8 @@ La pagina sta su `…azurestaticapps.net` e chiama `…azurewebsites.net`: per i
 
 Verificato **dal browser**, non dalla configurazione: è il tipo di cosa che sembra a posto finché non la si prova.
 
-## Cosa non mostra
+## L'immagine di partenza
 
-L'**immagine sorgente**. Nessun endpoint la restituisce, e aggiungerlo significherebbe cambiare la forma del contratto su tutti e tre i worker: decisione aperta (D95). Al suo posto la card riporta il peso di partenza accanto a quello di arrivo.
+La prima card è l'**originale**, servito da `GET /api/source?image=<nome>` — un endpoint aggiunto ai tre worker apposta, perché prima nessuno restituiva i byte sorgente (D97, chiude D95). Sta fuori dal percorso misurato: risponde con byte già in memoria dall'app init, senza toccare il decoder.
+
+Si chiede a **un solo backend**, non a tutti e tre: è lo stesso file byte per byte nei tre pacchetti di deploy, e tre copie identiche affiancate direbbero solo che sappiamo scaricare tre volte la stessa cosa. È un `<img src>` diretto senza `fetch`: essendo un `GET` semplice, il browser lo carica da sé.
