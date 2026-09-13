@@ -35,10 +35,18 @@ JPEG_SUBSAMPLING = 2
 MIN_QUALITY = 1
 MAX_QUALITY = 95
 
+# I tetti sono dimensionati su cio' che l'esperimento usa davvero (width=800,
+# count=80 — D89), non sul massimo tecnicamente rappresentabile: su un endpoint
+# anonimo il caso peggiore lo paga il free grant. I conti che portano a questi
+# due numeri stanno nel decision log (D100).
+#
+# Gli stessi due numeri valgono identici in .NET e Go, e il frontend non offre
+# nulla oltre questi: un tetto diverso fra i tre worker sarebbe un'asimmetria
+# di contratto.
 MIN_WIDTH = 1
-MAX_WIDTH = 10_000
+MAX_WIDTH = 4_000
 MIN_COUNT = 1
-MAX_COUNT = 10_000
+MAX_COUNT = 200
 
 IMAGES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "images")
 _IMAGE_SUFFIXES = (".jpg", ".jpeg")
@@ -128,12 +136,24 @@ def target_height(src_width: int, src_height: int, dst_width: int) -> int:
 
 
 def _parse_int(raw: Optional[str], name: str, default: int, lo: int, hi: int) -> int:
+    """Legge un intero dalla query string con la regola ^[0-9]+$ su cifre ASCII.
+
+    Il controllo esplicito PRIMA di int() non e' difensivo per abitudine: e' il
+    pezzo che rende il contratto lo stesso nei tre worker. int() di Python
+    accetta il separatore di cifre del linguaggio (int("5_0") == 50), gli spazi
+    ai bordi e le cifre Unicode non ASCII; int.TryParse e strconv.Atoi
+    accettano insiemi diversi ancora. Tre parser idiomatici sono tre contratti
+    diversi, e il README ne promette uno solo.
+
+    I casi attesi sono fissati in shared/conformance/param_cases.json, che i
+    test dei tre linguaggi leggono per verificare di essere d'accordo.
+    """
     if raw is None or raw == "":
         return default
-    try:
-        value = int(raw)
-    except ValueError:
+    # isascii() e non solo isdigit(): isdigit() e' Unicode e accetta '٥'.
+    if not (raw.isascii() and raw.isdigit()):
         raise InvalidParameter(f"{name} deve essere un intero, ricevuto {raw!r}")
+    value = int(raw)
     if not lo <= value <= hi:
         raise InvalidParameter(f"{name} deve stare tra {lo} e {hi}, ricevuto {value}")
     return value

@@ -7,7 +7,7 @@
 @description('Nome del linguaggio, usato solo per comporre i nomi delle risorse.')
 param language string
 
-@description('Runtime stack. Valori ammessi da Flex: dotnet-isolated, python, java, node, powerShell, custom.')
+@description('Runtime stack. Valori ammessi da Flex: dotnet-isolated, python, java, node, powerShell, go, custom. Go non compare nella tabella dei language stack supportati perche\' e\' in public preview, ma il valore ARM esiste ed e\' esposto da az functionapp list-flexconsumption-runtimes (D85).')
 param runtimeName string
 
 @description('Versione del runtime stack. Per "custom" vale 1.0, non e\' la versione del linguaggio.')

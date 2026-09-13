@@ -82,6 +82,21 @@ export const options = {
       duration: DURATION,
       preAllocatedVUs: PRE_ALLOCATED_VUS,
       maxVUs: MAX_VUS,
+
+      // Esplicito e NON il default. k6 aspetta questo tempo prima di
+      // interrompere a forza le iterazioni ancora in volo a fine finestra, e
+      // il default e' 30s ([Graceful
+      // stop](https://grafana.com/docs/k6/latest/using-k6/scenarios/concepts/graceful-stop/)).
+      // Trenta secondi non bastano: durante lo scale-out la coda lato client
+      // arriva a 36s (p95 di http_req_duration sul run Go, D91), quindi le
+      // ultime iterazioni verrebbero tagliate da k6 e il server registrerebbe
+      // dei 499 — che non sono un fallimento del backend ne' del generatore, e
+      // che sarebbero letti come il primo dei due. E' l'origine dei 7 `499` di
+      // D89. 120s copre il p95 osservato con margine.
+      //
+      // Identico per i tre linguaggi: un generatore configurato diversamente
+      // per ciascun backend sarebbe un'asimmetria in piu' da dichiarare.
+      gracefulStop: '120s',
     },
   },
   // Nessuna soglia: una threshold che fallisce interrompe il run, e qui il run
@@ -139,12 +154,19 @@ export function teardown(data) {
   console.log(`RUN_END ${new Date().toISOString()} (started ${data.startedAt})`);
 }
 
-// Nota di lettura dei risultati, per non confondere due fallimenti diversi:
+// Nota di lettura dei risultati, per non confondere tre fallimenti diversi:
 //
-//   http_req_failed      -> il backend ha risposto male (o non ha risposto)
-//   dropped_iterations   -> k6 non e' riuscito a PARTIRE al tasso richiesto,
-//                           perche' i VU allocati non bastavano
+//   http_req_failed        -> il backend ha risposto male (o non ha risposto)
+//   dropped_iterations     -> k6 non e' riuscito a PARTIRE al tasso richiesto,
+//                             perche' i VU allocati non bastavano
+//   interrupted iterations -> k6 ha TAGLIATO un'iterazione gia' partita allo
+//                             scadere di gracefulStop; lato server e' un 499
 //
 // Il secondo non e' un dato sul backend: e' il generatore che non ha tenuto il
 // passo, e invalida il run come misura di carico offerto. Se compare, si
 // rialza PRE_ALLOCATED_VUS e si rifa'.
+//
+// Il terzo non e' ne' l'uno ne' l'altro: la richiesta era partita e il backend
+// la stava servendo: e' k6 che ha chiuso la connessione. In
+// `resize_status_codes` compare come 499 e sembra un fallimento del backend.
+// gracefulStop a 120s esiste per non averne nessuno; se ne compaiono, si alza.

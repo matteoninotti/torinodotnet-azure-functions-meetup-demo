@@ -10,7 +10,21 @@
 
 targetScope = 'resourceGroup'
 
-@description('Prefisso comune a tutte le risorse.')
+// ⚠️ QUESTA E' LA FONTE NOMINALE, NON L'UNICA COPIA.
+// Il prefisso e il nome del resource group sono cablati anche in cinque posti
+// fuori dal Bicep, e cambiarli qui non rompe nessuno di quei cinque: le risorse
+// vengono create col nome nuovo e tutto il resto continua a parlare col vecchio,
+// fallendo con 404 e "resource not found" invece che con un errore di deploy.
+// Se questo valore cambia, vanno aggiornati tutti:
+//
+//   1. frontend/app.js            — gli host dei tre backend in BACKENDS
+//   2. load/scripts/resize.js     — il default di HOST
+//   3. load/scripts/wait-for-zero.sh — i default di RESOURCE_GROUP e APP_NAME
+//   4. scripts/deploy-frontend.sh — il default del resource group
+//   5. .github/workflows/deploy.yml — env.RESOURCE_GROUP e il nome della app
+//
+// `git grep torinodotnet` li elenca tutti.
+@description('Prefisso comune a tutte le risorse. Cablato anche in cinque punti fuori dal Bicep: vedi il commento sopra.')
 param namePrefix string = 'torinodotnet'
 
 @description('Regione. Deve supportare Flex Consumption: az functionapp list-flexconsumption-locations')
@@ -23,7 +37,7 @@ param location string = 'italynorth'
 // non fallisce rumorosamente, falsifica i numeri in silenzio (D22).
 // Conseguenza da conoscere: un deploy del Bicep scrive anche sulle app che non
 // stai cambiando, quindi non va lanciato durante un run di misura.
-@description('Linguaggi da istanziare. Go si aggiunge in Fase 5.')
+@description('Linguaggi da istanziare. Tutti e tre presenti: Python e .NET da Fase 2 e 4, Go aggiunto in Fase 5 (D85) e deployato in D87.')
 param workers array = [
   {
     language: 'python'

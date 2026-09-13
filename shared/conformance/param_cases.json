@@ -1,0 +1,27 @@
+{
+  "description": "Casi di conformita' per il PARSING dei parametri interi della query string. Le tre implementazioni (Python, .NET, Go) devono accettare e rifiutare esattamente gli stessi input. E' il gemello di height_cases.json: la' si verifica che i tre siano d'accordo sulla geometria dell'output, qui che siano d'accordo su cosa sia un intero valido.",
+  "why": "Prima dell'audit del 2026-09-14 i tre worker usavano il parser idiomatico del proprio linguaggio — int() in Python, int.TryParse in .NET, strconv.Atoi in Go — e i tre non accettano lo stesso insieme di stringhe. Verificato sui worker deployati: count=5_0 dava 50 su Python (il separatore di cifre del linguaggio) e 400 sugli altri due; count=%205 dava 5 su Python e .NET e 400 su Go; count=٥ (cifra araba) dava 5 su Python e 400 sugli altri due. Il README promette 'stesso contratto': con un parser per linguaggio non lo era, e la richiesta che un backend serve e un altro rifiuta non e' un caso di laboratorio — e' esattamente il genere di differenza che poi si legge come un errore del backend.",
+  "rule": "Prima del parse, la stringa deve corrispondere a ^[0-9]+$ su cifre ASCII. Niente segno, niente spazi, niente separatori, niente cifre non ASCII. Una stringa vuota (o assente) resta il valore di default, che e' il comportamento di sempre.",
+  "parameter": "count",
+  "min": 1,
+  "max": 200,
+  "default": 1,
+  "cases": [
+    { "raw": "5", "expected": 5, "why": "il caso normale" },
+    { "raw": "05", "expected": 5, "why": "zero iniziale: accettato da tutti e tre, resta accettato" },
+    { "raw": "1", "expected": 1, "why": "il minimo" },
+    { "raw": "200", "expected": 200, "why": "il massimo" },
+    { "raw": "", "expected": "default", "why": "parametro assente o vuoto: vale il default, non e' un errore" },
+    { "raw": "0", "expected": "invalid", "why": "sotto il minimo" },
+    { "raw": "201", "expected": "invalid", "why": "sopra il massimo" },
+    { "raw": "5_0", "expected": "invalid", "why": "CASO CRITICO: int('5_0') in Python vale 50 — il separatore di cifre del linguaggio entrava nel contratto HTTP. .NET e Go lo rifiutavano gia'." },
+    { "raw": " 5", "expected": "invalid", "why": "CASO CRITICO: spazio iniziale (%20 nella query string). int() e int.TryParse lo tolleravano, strconv.Atoi no." },
+    { "raw": "5 ", "expected": "invalid", "why": "spazio finale, stessa asimmetria dello spazio iniziale" },
+    { "raw": "٥", "expected": "invalid", "why": "CASO CRITICO: cifra arabo-indiana U+0665. str.isdigit() e int() di Python sono Unicode e la accettavano come 5; .NET con cultura invariante e Go no." },
+    { "raw": "+5", "expected": "invalid", "why": "segno esplicito: accettato da Atoi e da int(), non da TryParse con NumberStyles.None" },
+    { "raw": "-5", "expected": "invalid", "why": "negativo: rifiutato comunque dal controllo di intervallo, ma va rifiutato prima e con lo stesso messaggio" },
+    { "raw": "5.0", "expected": "invalid", "why": "non e' un intero" },
+    { "raw": "abc", "expected": "invalid", "why": "non e' un numero" },
+    { "raw": "99999999999999999999", "expected": "invalid", "why": "cifre ASCII valide ma fuori dal range di un intero a 32 bit: deve dare 400 in tutti e tre, non un overflow silenzioso" }
+  ]
+}

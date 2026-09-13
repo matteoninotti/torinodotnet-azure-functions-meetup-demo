@@ -11,7 +11,9 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"image/jpeg"
 	"os"
 	"path/filepath"
 	"testing"
@@ -69,6 +71,79 @@ func TestTargetHeightRejectsDegenerateSource(t *testing.T) {
 	}
 }
 
+// --- Parsing dei parametri: casi condivisi -----------------------------------
+
+type paramSpec struct {
+	Parameter string `json:"parameter"`
+	Min       int    `json:"min"`
+	Max       int    `json:"max"`
+	Default   int    `json:"default"`
+	Cases     []struct {
+		Raw      string          `json:"raw"`
+		Expected json.RawMessage `json:"expected"`
+		Why      string          `json:"why"`
+	} `json:"cases"`
+}
+
+func loadParamCases(t *testing.T) paramSpec {
+	t.Helper()
+	path := filepath.Join("..", "..", "shared", "conformance", "param_cases.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("non riesco a leggere i casi condivisi: %v", err)
+	}
+	var spec paramSpec
+	if err := json.Unmarshal(data, &spec); err != nil {
+		t.Fatalf("JSON dei casi condivisi malformato: %v", err)
+	}
+	return spec
+}
+
+func TestParseIntMatchesConformance(t *testing.T) {
+	spec := loadParamCases(t)
+	// Stesso guardrail di TestTargetHeightMatchesConformance: se il percorso
+	// relativo si rompesse, i casi sparirebbero senza che nessun test fallisca.
+	if len(spec.Cases) != 16 {
+		t.Fatalf("attesi 16 casi di parsing, trovati %d", len(spec.Cases))
+	}
+	// I limiti scritti nel file devono essere quelli davvero applicati: se
+	// qualcuno alzasse maxCount nel codice e non nel file, i casi passerebbero
+	// pur non descrivendo piu' il contratto vero.
+	if spec.Min != minCount || spec.Max != maxCount || spec.Default != 1 {
+		t.Fatalf("i limiti del file (%d..%d, default %d) non sono quelli del worker (%d..%d, default 1)",
+			spec.Min, spec.Max, spec.Default, minCount, maxCount)
+	}
+
+	for _, c := range spec.Cases {
+		got, err := parseInt(c.Raw, spec.Parameter, spec.Default, spec.Min, spec.Max)
+
+		var want string
+		if jsonErr := json.Unmarshal(c.Expected, &want); jsonErr == nil {
+			switch want {
+			case "invalid":
+				if _, ok := err.(*invalidParameterError); !ok {
+					t.Errorf("%q: atteso invalidParameterError, ottenuto %v (%v) — %s", c.Raw, got, err, c.Why)
+				}
+			case "default":
+				if err != nil || got != spec.Default {
+					t.Errorf("%q: atteso il default %d, ottenuto %v (%v) — %s", c.Raw, spec.Default, got, err, c.Why)
+				}
+			default:
+				t.Fatalf("%q: esito atteso sconosciuto %q", c.Raw, want)
+			}
+			continue
+		}
+
+		var expected int
+		if jsonErr := json.Unmarshal(c.Expected, &expected); jsonErr != nil {
+			t.Fatalf("%q: esito atteso illeggibile: %v", c.Raw, jsonErr)
+		}
+		if err != nil || got != expected {
+			t.Errorf("%q: atteso %d, ottenuto %v (%v) — %s", c.Raw, expected, got, err, c.Why)
+		}
+	}
+}
+
 // --- Parsing dei parametri --------------------------------------------------
 
 func query(pairs map[string]string) func(string) string {
@@ -101,6 +176,17 @@ func requireImage(t *testing.T) string {
 		t.Skip("nessuna immagine di test in functions/go/images/: lanciare ./scripts/sync-images.sh go")
 	}
 	return names[0]
+}
+
+// requireNamedImage restituisce i byte di un'immagine PRECISA, per i test che
+// hanno bisogno di dimensioni note, o salta il test.
+func requireNamedImage(t *testing.T, name string) []byte {
+	t.Helper()
+	payload, ok := sourceBytes(name)
+	if !ok {
+		t.Skipf("%s non e' in functions/go/images/: lanciare ./scripts/sync-images.sh go", name)
+	}
+	return payload
 }
 
 func TestParseParamsRejectsOutOfRange(t *testing.T) {
@@ -193,8 +279,33 @@ func TestPipelineHeightFollowsTheSharedFormula(t *testing.T) {
 	// Verifica che la formula condivisa sia quella davvero usata dalla
 	// pipeline, non solo quella testata in isolamento: un resize che
 	// ignorasse targetHeight passerebbe comunque i casi di conformita'.
-	image := requireImage(t)
-	p, err := parseParams(query(map[string]string{"image": image, "width": "640"}))
+	//
+	// Perche' serve un'immagine di dimensioni NOTE e non una qualunque:
+	// `Height > 0` — l'asserzione di prima — era vera per qualunque resize,
+	// compreso uno che avesse ignorato del tutto l'altezza calcolata. Il
+	// commento prometteva un controllo che l'asserzione non faceva.
+	const name = "npm-install-7-years.jpg"
+	source := requireNamedImage(t, name)
+
+	// Le dimensioni si leggono dal file con il decoder QUI nel test, non dal
+	// codice sotto test: altrimenti si confronterebbe la pipeline con se stessa.
+	config, err := jpeg.DecodeConfig(bytes.NewReader(source))
+	if err != nil {
+		t.Fatalf("non riesco a leggere l'header di %s: %v", name, err)
+	}
+	if config.Width != 1322 || config.Height != 1140 {
+		t.Fatalf("%s non ha le dimensioni attese: %dx%d invece di 1322x1140", name, config.Width, config.Height)
+	}
+
+	expectedHeight, err := targetHeight(config.Width, config.Height, 640)
+	if err != nil {
+		t.Fatalf("formula fallita: %v", err)
+	}
+	if expectedHeight != 552 {
+		t.Fatalf("la formula condivisa su 1322x1140 -> 640 deve dare 552, ha dato %d", expectedHeight)
+	}
+
+	p, err := parseParams(query(map[string]string{"image": name, "width": "640"}))
 	if err != nil {
 		t.Fatalf("parsing fallito: %v", err)
 	}
@@ -202,11 +313,108 @@ func TestPipelineHeightFollowsTheSharedFormula(t *testing.T) {
 	if err != nil {
 		t.Fatalf("pipeline fallita: %v", err)
 	}
-	if result.Width != 640 {
-		t.Errorf("larghezza attesa 640, ottenuta %d", result.Width)
+	if result.Width != 640 || result.Height != expectedHeight {
+		t.Errorf("attese 640x%d, ottenute %dx%d", expectedHeight, result.Width, result.Height)
 	}
-	if result.Height <= 0 || result.OutputBytes <= 0 {
-		t.Errorf("risultato degenere: height=%d bytes=%d", result.Height, result.OutputBytes)
+	if result.OutputBytes <= 0 {
+		t.Errorf("risultato degenere: bytes=%d", result.OutputBytes)
+	}
+
+	// E il JPEG prodotto deve avere davvero quelle dimensioni. Height nel
+	// risultato e' il valore che la pipeline ha CALCOLATO: confrontarlo con la
+	// formula sarebbe una tautologia. I pixel veri no.
+	produced, err := jpeg.DecodeConfig(bytes.NewReader(result.Payload))
+	if err != nil {
+		t.Fatalf("il payload prodotto non e' un JPEG leggibile: %v", err)
+	}
+	if produced.Width != 640 || produced.Height != expectedHeight {
+		t.Errorf("il JPEG prodotto e' %dx%d, attese 640x%d", produced.Width, produced.Height, expectedHeight)
+	}
+}
+
+// --- Parametri dell'encoder (D8) ---------------------------------------------
+
+// readJpegEncoding legge dal JPEG prodotto il marker SOF e i fattori di
+// campionamento della componente Y — cioe' le due cose che D8 fissa e che
+// nessun test verificava.
+//
+// Si leggono dai byte e non dalla configurazione dell'encoder: la
+// configurazione dice cosa abbiamo chiesto, i byte dicono cosa e' uscito. In Go
+// non c'e' niente da chiedere — image/jpeg scrive sempre 4:2:0 baseline — ed e'
+// proprio per questo che il test serve: e' il worker che DEFINISCE il minimo
+// comune denominatore, quindi e' qui che si verifica che il denominatore sia
+// ancora quello.
+//
+// Struttura di un segmento SOF: lunghezza (2 byte), precisione (1), altezza
+// (2), larghezza (2), numero di componenti (1), poi per ogni componente id (1),
+// fattori di campionamento impacchettati in un byte (1) e tabella di
+// quantizzazione (1). Per la Y, 0x22 significa h=2 v=2, cioe' 4:2:0.
+func readJpegEncoding(t *testing.T, data []byte) (byte, byte) {
+	t.Helper()
+	if len(data) < 4 || data[0] != 0xFF || data[1] != 0xD8 {
+		t.Fatalf("il payload non comincia con il marker SOI")
+	}
+	for i := 2; i+3 < len(data); {
+		if data[i] != 0xFF {
+			t.Fatalf("segmento malformato all'offset %d", i)
+		}
+		marker := data[i+1]
+		length := int(data[i+2])<<8 | int(data[i+3])
+		// SOF0 = baseline, SOF1 = extended sequential, SOF2 = progressive.
+		// Gli altri FF Cx sono DHT (C4), RSTn, DAC (CC): non sono SOF.
+		if marker == 0xC0 || marker == 0xC1 || marker == 0xC2 {
+			// + 2 (lunghezza) + 1 (precisione) + 4 (altezza, larghezza)
+			// + 1 (numero componenti) + 1 (id della prima componente)
+			return marker, data[i+2+2+1+4+1+1]
+		}
+		i += 2 + length
+	}
+	t.Fatalf("nessun marker SOF trovato nel JPEG prodotto")
+	return 0, 0
+}
+
+func TestPipelineOutputIsBaseline420(t *testing.T) {
+	// I tre worker devono produrre lo STESSO formato di JPEG, e il minimo
+	// comune denominatore lo impone questa stdlib, che sa fare solo "4:2:0
+	// baseline" (D8). Fino a ora era verificato a mano; il README pero'
+	// promette che la simmetria e' verificata invece che sperata.
+	p, err := parseParams(query(map[string]string{"image": requireImage(t)}))
+	if err != nil {
+		t.Fatalf("parsing fallito: %v", err)
+	}
+	result, err := runPipeline(p)
+	if err != nil {
+		t.Fatalf("pipeline fallita: %v", err)
+	}
+
+	sof, luma := readJpegEncoding(t, result.Payload)
+	if sof != 0xC0 {
+		t.Errorf("atteso SOF0 (baseline, 0xC0), ottenuto 0x%02X", sof)
+	}
+	if luma != 0x22 {
+		t.Errorf("atteso campionamento 4:2:0 sulla luma (0x22), ottenuto 0x%02X", luma)
+	}
+}
+
+func TestPipelineOutputHonoursTheQualityParameter(t *testing.T) {
+	// La qualita' non si legge dai marker senza reimplementare le tabelle di
+	// quantizzazione, ma un effetto osservabile ce l'ha: a parita' di immagine,
+	// qualita' piu' bassa deve produrre meno byte.
+	image := requireImage(t)
+	size := func(quality string) int {
+		p, err := parseParams(query(map[string]string{"image": image, "quality": quality}))
+		if err != nil {
+			t.Fatalf("parsing fallito: %v", err)
+		}
+		result, err := runPipeline(p)
+		if err != nil {
+			t.Fatalf("pipeline fallita: %v", err)
+		}
+		return result.OutputBytes
+	}
+	small, large := size("20"), size("95")
+	if small >= large {
+		t.Errorf("qualita' 20 ha prodotto %d byte, qualita' 95 ne ha prodotti %d", small, large)
 	}
 }
 

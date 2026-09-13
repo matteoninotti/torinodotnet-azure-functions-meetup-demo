@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"image"
 	"image/jpeg"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -36,10 +37,19 @@ const (
 	minQuality = 1
 	maxQuality = 95
 
+	// I tetti sono dimensionati su cio' che l'esperimento usa davvero
+	// (width=800, count=80 — D89), non sul massimo tecnicamente
+	// rappresentabile: su un endpoint anonimo il caso peggiore lo paga il
+	// free grant. I conti che portano a questi due numeri stanno nel decision
+	// log (D100).
+	//
+	// Gli stessi due numeri valgono identici in Python e .NET, e il frontend
+	// non offre nulla oltre questi: un tetto diverso fra i tre worker sarebbe
+	// un'asimmetria di contratto.
 	minWidth = 1
-	maxWidth = 10000
+	maxWidth = 4000
 	minCount = 1
-	maxCount = 10000
+	maxCount = 200
 )
 
 // --- Errori -----------------------------------------------------------------
@@ -105,7 +115,16 @@ func loadImages() {
 		}
 		data, err := os.ReadFile(filepath.Join(dir, name))
 		if err != nil {
-			continue
+			// Fatale, e non `continue`. La cartella ASSENTE e' tollerata di
+			// proposito (vedi sopra: un'istanza senza immagini risponde 404
+			// invece di andare in crash), ma un file che c'e' e non si legge e'
+			// un'altra cosa: e' un pacchetto di deploy rotto. Saltarlo in
+			// silenzio significherebbe servire due immagini su tre mentre
+			// Python e .NET — dove l'errore di lettura fa fallire l'app init —
+			// ne servono tre, e `GET /api/images` non lo intercetterebbe
+			// perche' guarda solo che l'elenco non sia vuoto. Un'immagine
+			// servita da due worker su tre invalida il confronto in silenzio.
+			log.Fatalf("immagine %s illeggibile: %v", name, err)
 		}
 		loaded[name] = data
 	}
@@ -206,12 +225,33 @@ func targetHeight(srcWidth, srcHeight, dstWidth int) (int, error) {
 
 // --- Validazione dei parametri ----------------------------------------------
 
+// parseInt legge un intero dalla query string con la regola ^[0-9]+$ su cifre
+// ASCII.
+//
+// Il controllo esplicito sui byte PRIMA di Atoi non e' difensivo per
+// abitudine: e' il pezzo che rende il contratto lo stesso nei tre worker. Atoi
+// accetta il segno esplicito ("+5"), int() di Python accetta anche il
+// separatore di cifre ("5_0" vale 50), gli spazi ai bordi e le cifre Unicode
+// non ASCII. Tre parser idiomatici sono tre contratti diversi, e il README ne
+// promette uno solo.
+//
+// I casi attesi sono fissati in shared/conformance/param_cases.json, che i
+// test dei tre linguaggi leggono per verificare di essere d'accordo.
 func parseInt(raw, name string, fallback, lo, hi int) (int, error) {
 	if raw == "" {
 		return fallback, nil
 	}
+	// Sui byte e non sulle rune: una cifra ASCII e' un byte solo, e qualunque
+	// cosa non lo sia va rifiutata comunque.
+	for i := 0; i < len(raw); i++ {
+		if raw[i] < '0' || raw[i] > '9' {
+			return 0, invalidParameter("%s deve essere un intero, ricevuto '%s'", name, raw)
+		}
+	}
 	value, err := strconv.Atoi(raw)
 	if err != nil {
+		// Cifre tutte valide ma numero fuori dal range di un int: deve dare
+		// 400 come gli altri due, non un overflow silenzioso.
 		return 0, invalidParameter("%s deve essere un intero, ricevuto '%s'", name, raw)
 	}
 	if value < lo || value > hi {

@@ -30,7 +30,9 @@ public sealed class Functions(ILogger<Functions> logger)
     // Prefisso su cui si aggancia la query di Log Analytics. Un'unica riga di
     // log con un payload JSON stabile, invece delle customDimensions: funziona
     // allo stesso modo nei tre worker e non dipende da come ciascuno inoltra i
-    // campi strutturati. Il payload comincia a substring(Message, 15).
+    // campi strutturati. Il JSON viene estratto dalla query con una regex e non
+    // a offset fisso (D87): su Go il messaggio non finisce dove finisce il
+    // payload, e un offset avrebbe funzionato qui e fallito in silenzio la'.
     private const string MetricsPrefix = "RESIZE_METRICS";
 
     private static IActionResult Error(int status, string message) => new ContentResult
@@ -77,7 +79,14 @@ public sealed class Functions(ILogger<Functions> logger)
             ["height"] = result.Height,
             ["quality"] = parameters.Quality,
             ["output_bytes"] = result.OutputBytes,
-            ["total_ms"] = Math.Round(result.TotalMs, 3),
+            // NON arrotondato, in nessuno dei tre worker: Math.Round di C# e
+            // round() di Python mandano 0.5 al pari, math.Round di Go arrotonda
+            // per eccesso in valore assoluto, e sullo stesso valore i tre
+            // emettevano cifre diverse. E' la stessa classe di asimmetria che
+            // D7 evita per l'altezza, tolta allo stesso modo: non scegliendo un
+            // arrotondamento, ma non arrotondando. Ad arrotondare ci pensa chi
+            // legge.
+            ["total_ms"] = result.TotalMs,
         };
 
         logger.LogInformation("{Prefix} {Payload}", MetricsPrefix, JsonSerializer.Serialize(metrics));

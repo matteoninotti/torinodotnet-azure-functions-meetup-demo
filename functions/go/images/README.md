@@ -18,11 +18,13 @@ Il pacchetto di deploy è la cartella che contiene `host.json`, e niente al di f
 
 ## Come accorgersene se la copia non è avvenuta
 
-`resize_core._load_images()` non fallisce se la cartella è vuota: restituisce un dizionario vuoto e l'app parte lo stesso. I sintomi sono:
+`loadImages()` non fallisce se la cartella è vuota o assente: lascia la mappa vuota e l'app parte lo stesso. I sintomi sono:
 
 - `GET /api/images` → `{"images": []}`
 - `GET /api/health` → `"images": []`
 - `POST /api/resize?image=<qualunque>` → `404`
-- in locale, 9 test si auto-saltano invece di fallire
+- in locale, **9 test si auto-saltano** (`t.Skip`) invece di fallire
+
+⚠️ La tolleranza vale per la cartella **assente o vuota**, non per un file che c'è e non si legge: quello è `log.Fatalf`, come in Python e .NET, perché servire due immagini su tre invece di tre invaliderebbe il confronto senza nessun segnale.
 
 È voluto — un'istanza senza immagini deve dirlo chiaramente invece di andare in crash all'avvio — ma significa che **una copia dimenticata non si manifesta come errore di deploy**. Controllare `GET /api/images` dopo ogni deploy è il modo più veloce per accorgersene.

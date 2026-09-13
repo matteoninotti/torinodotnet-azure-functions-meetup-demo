@@ -37,6 +37,9 @@
     <Content Include="..\..\shared\conformance\height_cases.json"
              Link="height_cases.json"
              CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\shared\conformance\param_cases.json"
+             Link="param_cases.json"
+             CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!--
