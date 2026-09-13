@@ -14,6 +14,7 @@ namespace ResizeWorker;
 /// Contratto (identico nei tre linguaggi):
 ///
 ///     POST /api/resize?image=&lt;nome&gt;&amp;count=&lt;N&gt;&amp;width=&lt;px&gt;&amp;quality=&lt;1-95&gt;[&amp;hash=1][&amp;return=image]
+///     GET  /api/source?image=&lt;nome&gt;
 ///
 /// La risposta di default e' JSON. `return=image` restituisce il JPEG per la
 /// demo visiva e non va mai usato durante i run di misura: aggiungerebbe alla
@@ -127,6 +128,35 @@ public sealed class Functions(ILogger<Functions> logger)
             ContentType = "application/json",
             StatusCode = 200,
         };
+    }
+
+    /// <summary>
+    /// Byte originali di un'immagine del pool: la meta' "prima" della demo.
+    ///
+    /// Query string e non un segmento di path (<c>/api/images/{nome}</c>) per
+    /// due motivi: e' la stessa forma <c>?image=</c> del resto del contratto, e
+    /// non dipende da come ciascuno dei tre host risolve i template di route —
+    /// che sul worker Go, in public preview, non e' verificabile prima del
+    /// deploy.
+    ///
+    /// NON e' nel percorso misurato: restituisce byte gia' in memoria senza
+    /// toccare il decoder (D3, D95).
+    /// </summary>
+    [Function("source")]
+    public IActionResult Source(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "source")] HttpRequest request)
+    {
+        string name = Query(request, "image") ?? string.Empty;
+        byte[]? payload = ResizeCore.SourceBytes(name);
+
+        if (payload is null)
+        {
+            IReadOnlyList<string> available = ResizeCore.AvailableImages();
+            string list = available.Count > 0 ? string.Join(", ", available) : "nessuna";
+            return Error(404, $"immagine '{name}' non trovata. Disponibili: {list}");
+        }
+
+        return new FileContentResult(payload, "image/jpeg");
     }
 
     /// <summary>

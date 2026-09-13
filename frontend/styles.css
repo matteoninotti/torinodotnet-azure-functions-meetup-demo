@@ -92,6 +92,10 @@ button:disabled { opacity: .45; cursor: progress; }
 }
 
 .card.pending { opacity: .6; }
+
+/* L'originale ha un bordo diverso: affiancato a tre risultati che gli
+   somigliano molto, senza un segno visivo si confonde con loro. */
+.card.source { border-style: dashed; }
 .card.failed { border-color: var(--error); }
 
 .card h2 { margin: 0 0 .8rem; font-size: 1.15rem; display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; }

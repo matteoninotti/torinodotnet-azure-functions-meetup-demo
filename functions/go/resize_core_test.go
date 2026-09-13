@@ -237,6 +237,34 @@ func TestImageCatalogReportsRealByteSizes(t *testing.T) {
 	}
 }
 
+// I byte serviti alla demo devono essere gli stessi che il catalogo conta: se
+// divergessero, la pagina mostrerebbe come "originale" qualcosa di diverso da
+// cio' che la pipeline ha davvero ricevuto in ingresso.
+func TestSourceBytesMatchesTheCatalogSize(t *testing.T) {
+	requireImage(t)
+	for _, entry := range imageCatalog() {
+		payload, ok := sourceBytes(entry.Name)
+		if !ok {
+			t.Errorf("%s: sorgente non trovata", entry.Name)
+			continue
+		}
+		if len(payload) != entry.Bytes {
+			t.Errorf("%s: %d byte serviti, %d nel catalogo", entry.Name, len(payload), entry.Bytes)
+		}
+		// Un JPEG comincia sempre con il marker SOI: conferma che stiamo
+		// servendo il file grezzo e non una ricodifica.
+		if len(payload) < 2 || payload[0] != 0xFF || payload[1] != 0xD8 {
+			t.Errorf("%s: non comincia con il marker SOI di un JPEG", entry.Name)
+		}
+	}
+}
+
+func TestSourceBytesUnknownImage(t *testing.T) {
+	if _, ok := sourceBytes("non-esiste.jpg"); ok {
+		t.Error("attesa un'immagine inesistente non trovata")
+	}
+}
+
 // TestMain carica le immagini una volta per l'intero pacchetto di test, come fa
 // main() in app init. Senza, il catalogo resterebbe vuoto e ogni test che
 // dipende dalle immagini si salterebbe anche con la sincronizzazione fatta.

@@ -83,6 +83,18 @@ public static class ResizeCore
         [.. images.Keys.OrderBy(name => name, StringComparer.Ordinal)];
 
     /// <summary>
+    /// Byte grezzi dell'immagine sorgente, senza decodificarla.
+    ///
+    /// Serve solo alla demo visiva: il frontend mostra l'originale accanto al
+    /// risultato, e l'originale non lo serviva nessun endpoint (D95).
+    /// Restituisce i byte gia' in memoria dall'app init — nessun accesso al
+    /// disco, nessun decoder, quindi niente che possa interferire col percorso
+    /// misurato.
+    /// </summary>
+    public static byte[]? SourceBytes(string name) =>
+        images.TryGetValue(name, out byte[]? payload) ? payload : null;
+
+    /// <summary>
     /// Elenco delle immagini selezionabili, per il selettore del frontend.
     ///
     /// Deliberatamente NON include le dimensioni in pixel: ricavarle vorrebbe

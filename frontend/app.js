@@ -140,6 +140,34 @@ async function runOne(backend, params) {
   return { metrics, objectUrl: URL.createObjectURL(blob) };
 }
 
+// --- Immagine sorgente -------------------------------------------------------
+
+// L'originale si chiede a UN SOLO backend, non a tutti e tre: e' lo stesso file
+// byte per byte nei tre pacchetti di deploy — lo verificano i byte del catalogo,
+// che il frontend confronta gia' — e mostrarne tre copie identiche affiancate
+// direbbe solo che sappiamo scaricare tre volte la stessa cosa.
+//
+// <img src> diretto e nessun fetch: e' un GET, quindi il browser lo carica da
+// solo. Vale anche come prova che l'endpoint e' davvero un GET semplice e non
+// una richiesta che ha bisogno di preflight.
+function renderSource(params) {
+  const backend = BACKENDS[0];
+  const url = `${api(backend, 'source')}?${buildQuery({ image: params.image })}`;
+  const before = sourceBytes.get(params.image);
+
+  const card = document.createElement('article');
+  card.className = 'card source';
+  card.innerHTML = `
+    <h2>Originale <span class="runtime">sorgente</span></h2>
+    <img src="${url}" alt="Immagine di partenza, prima del resize">
+    <dl>
+      <dt>Peso</dt><dd>${formatBytes(before)}</dd>
+      <dt>Nota</dt><dd class="muted">Lo stesso file per i tre worker.</dd>
+    </dl>
+  `;
+  return card;
+}
+
 function renderPending(backend) {
   const card = document.createElement('article');
   card.className = 'card pending';
@@ -183,7 +211,7 @@ els.form.addEventListener('submit', async (event) => {
 
   els.run.disabled = true;
   setStatus('Richiesta inviata ai tre backend…');
-  els.results.replaceChildren(...BACKENDS.map(renderPending));
+  els.results.replaceChildren(renderSource(params), ...BACKENDS.map(renderPending));
 
   await Promise.all(
     BACKENDS.map(async (backend) => {

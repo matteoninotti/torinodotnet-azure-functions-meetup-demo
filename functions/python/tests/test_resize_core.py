@@ -126,3 +126,24 @@ def test_image_catalog_is_consistent_with_available_images():
 def test_image_catalog_reports_real_byte_sizes():
     for entry in resize_core.image_catalog():
         assert entry["bytes"] > 0
+
+
+@requires_images
+def test_source_bytes_matches_the_catalog_size():
+    """I byte serviti dalla demo devono essere gli stessi che il catalogo conta.
+
+    Se divergessero, la pagina mostrerebbe come "originale" qualcosa di diverso
+    da cio' che la pipeline ha davvero ricevuto in ingresso, e il confronto
+    prima/dopo direbbe una cosa falsa.
+    """
+    for entry in resize_core.image_catalog():
+        payload = resize_core.source_bytes(entry["name"])
+        assert payload is not None
+        assert len(payload) == entry["bytes"]
+        # Un JPEG comincia sempre con il marker SOI: conferma che stiamo
+        # servendo il file grezzo e non una ricodifica.
+        assert payload[:2] == b"\xff\xd8"
+
+
+def test_source_bytes_unknown_image_is_none():
+    assert resize_core.source_bytes("non-esiste.jpg") is None

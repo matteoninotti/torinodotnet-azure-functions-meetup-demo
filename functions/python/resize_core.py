@@ -82,6 +82,17 @@ def available_images() -> list:
     return sorted(_IMAGES.keys())
 
 
+def source_bytes(name: str):
+    """Byte grezzi dell'immagine sorgente, senza decodificarla.
+
+    Serve solo alla demo visiva: il frontend mostra l'originale accanto al
+    risultato, e l'originale non lo serviva nessun endpoint (D95). Restituisce
+    i byte gia' in memoria dall'app init — nessun accesso al disco, nessun
+    decoder, quindi niente che possa interferire col percorso misurato.
+    """
+    return _IMAGES.get(name)
+
+
 def image_catalog() -> list:
     """Elenco delle immagini selezionabili, per il selettore del frontend.
 
