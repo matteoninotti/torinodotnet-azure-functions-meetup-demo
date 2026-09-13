@@ -90,6 +90,17 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 - [x] **[S] Configurare il CORS** con l'origine della Static Web App su **tutte e tre** le Function App (D12, D88). ✅ Dichiarato nel Bicep con l'origine letta dalla risorsa SWA stessa, e deployato prima dell'inizio della campagna di misura come D72 richiede.
 - [x] **[M] CORS** verificato dal browser, non solo dalla configurazione. ✅ La pagina carica il catalogo dalle tre origini ed esegue il resize sui tre. ⚠️ `az resource show` dà `cors: null` anche quando funziona: serve `az functionapp cors show` (D93).
 
+## Fase 6 modifiche — Frontend
+
+Rifiniture al pannello per renderlo più efficace dal vivo. Non tocca il percorso misurato: nessun endpoint nuovo, nessun redeploy dei worker, solo file statici sulla SWA.
+
+- [x] **[S] Titolo e disclaimer.** Il titolo diventa "Comparatore resize e compressione JPEG". Il disclaimer diceva che i numeri erano "indicativi", lasciando intendere che fossero finti: sono reali — è `total_ms`, la stessa strumentazione server-side delle misure vere — ma un singolo click non è una misura **statisticamente valida** (niente ripetizioni, niente percentili, carico non controllato). Riscritto per dire quello.
+- [x] **[M] Selettore a checkbox al posto della tendina**, per eseguire su più immagini insieme. Serve a un momento preciso del talk: affiancare baseline e progressive rende visibile il costo 2,6× del progressive (D8) invece di dirlo a parole. ✅ Tessere cliccabili per intero, la prima preselezionata.
+- [x] **[S] Thumbnail accanto a ogni checkbox**, servite da `GET /api/source?image=<nome>` (D97). ⚠️ Sono i JPEG originali da 220–280 kB, non thumbnail vere: il browser le scala, ma popolare il selettore costa fino a ~750 kB a caricamento. Compromesso accettato per una demo, non da ottimizzare ora. ✅ `object-fit: contain` per far riconoscere l'immagine intera invece di un crop.
+- [x] **[M] Layout raggruppato per immagine**: un blocco per immagine selezionata, con intestazione e dentro le sue quattro card (originale + i tre worker). ✅
+- [x] **[S] Esecuzione sequenziale fra immagini**, parallela fra i tre backend. Con la concorrenza a 1, lanciare tre immagini insieme darebbe a ogni app tre richieste simultanee, quindi due cold start di troppo davanti al pubblico. Sequenziale ogni worker resta su un'istanza calda — ed è anche il comportamento che si vuole mostrare. ✅ I blocchi compaiono progressivamente, uno per immagine.
+- [x] **[S] Verifica dal browser** su desktop e mobile dopo il redeploy. ✅ Due immagini insieme, otto card, nessun fallimento. Bug trovato e corretto: `.field label` colpiva anche le tessere del selettore, rendendo i nomi dei file in maiuscolo e grigi — e sono le stringhe che si passano a `?image=`.
+
 ## Fase 7 — Run finali e analisi
 
 - [x] **[M] Taratura definitiva di `count=N` e dell'RPS target, con tutti e tre i worker deployati** (D43). ✅ `count=80`, 10 req/s per 60s, 300 VU preallocati, identici per Metrica 1 e Metrica 3 (D89, D90, D92). Va fatta qui e non prima: `count` si dimensiona perché **la più veloce delle tre** superi 1s, e quale sia la più veloce non è deducibile — è uno dei risultati dell'esperimento. Sostituisce i valori provvisori di Fase 3; entrambi vanno scritti nel log, il provvisorio e il definitivo.

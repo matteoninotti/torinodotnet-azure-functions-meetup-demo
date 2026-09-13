@@ -32,7 +32,7 @@ h1 { margin: 0 0 .4rem; font-size: 1.9rem; letter-spacing: -.02em; }
   /* Grid e non flex: con flex il campo piu' alto (quello con la nota sotto)
      spingeva il bottone su una riga sua. */
   display: grid;
-  grid-template-columns: minmax(14rem, 2fr) repeat(3, minmax(6rem, 1fr)) auto;
+  grid-template-columns: repeat(3, minmax(6rem, 1fr)) auto;
   gap: 1rem;
   align-items: end;
   padding: 1.2rem;
@@ -43,7 +43,65 @@ h1 { margin: 0 0 .4rem; font-size: 1.9rem; letter-spacing: -.02em; }
 
 .field { display: flex; flex-direction: column; gap: .35rem; min-width: 0; }
 
-.field label { font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+/* Il selettore sta su una riga sua, sopra i tre campi numerici. */
+.field-images {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.field-images legend {
+  padding: 0 0 .5rem;
+  font-size: .8rem;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--muted);
+}
+
+.options { display: flex; flex-wrap: wrap; gap: .6rem; }
+
+/* Ogni opzione e' una tessera cliccabile per intero, non una checkbox con
+   un'etichetta di fianco: dal vivo il bersaglio piccolo si sbaglia. */
+.option {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  padding: .5rem .8rem .5rem .55rem;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.option:hover { border-color: var(--accent); }
+
+/* :has() per evidenziare la tessera selezionata senza doverlo fare in JS.
+   Se un browser non lo supportasse, resta comunque visibile la checkbox. */
+.option:has(input:checked) {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.option input { width: 1.05rem; height: 1.05rem; accent-color: var(--accent); }
+
+/* Le anteprime sono i JPEG originali da 220-280 kB, non thumbnail vere: il
+   browser li scala. Compromesso accettato per una demo — object-fit evita che
+   i diversi rapporti d'aspetto facciano ballare l'altezza delle tessere. */
+.option img {
+  width: 64px;
+  height: 48px;
+  object-fit: contain;
+  border-radius: 4px;
+  background: #000;
+}
+
+.option-text { display: flex; flex-direction: column; line-height: 1.3; }
+.option-name { font-size: .85rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.option-size { font-size: .75rem; color: var(--muted); }
+
+.field > label { font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
 
 .field small { color: var(--muted); font-size: .75rem; }
 
@@ -78,7 +136,21 @@ button:disabled { opacity: .45; cursor: progress; }
 #status.error { color: var(--error); }
 #status.warn { color: var(--warn); }
 
-.results {
+.results { display: flex; flex-direction: column; gap: 2rem; }
+
+.group { display: flex; flex-direction: column; gap: .8rem; }
+
+.group-title {
+  margin: 0;
+  font: 600 1rem/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
+  display: flex;
+  gap: .6rem;
+  align-items: baseline;
+  padding-bottom: .5rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 1.2rem;
@@ -98,7 +170,7 @@ button:disabled { opacity: .45; cursor: progress; }
 .card.source { border-style: dashed; }
 .card.failed { border-color: var(--error); }
 
-.card h2 { margin: 0 0 .8rem; font-size: 1.15rem; display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; }
+.card h3 { margin: 0 0 .8rem; font-size: 1.05rem; display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; }
 
 .runtime { font: 400 .75rem/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); }
 
@@ -116,9 +188,10 @@ footer { margin-top: 2.5rem; color: var(--muted); font-size: .82rem; }
 @media (max-width: 760px) {
   body { padding: 1.25rem 1rem 2rem; }
   #controls { grid-template-columns: 1fr 1fr; }
-  #controls > .field:first-child { grid-column: 1 / -1; }
   #controls > button { grid-column: 1 / -1; }
   #controls input[type="number"] { width: 100%; }
+  .options { flex-direction: column; }
+  .option { width: 100%; }
 }
 
 @media (prefers-color-scheme: light) {
