@@ -29,11 +29,42 @@ const api = (backend, path) => `https://${backend.host}/api/${path}`;
 
 const buildQuery = (params) => new URLSearchParams(params).toString();
 
-// L'originale si chiede sempre a UN SOLO backend: e' lo stesso file byte per
-// byte nei tre pacchetti di deploy (verificato, D97), quindi chiederlo a tutti
-// e tre direbbe solo che sappiamo scaricare tre volte la stessa cosa.
+// L'originale si chiede a UN SOLO backend: e' lo stesso file byte per byte nei
+// tre pacchetti di deploy (verificato, D97), quindi chiederlo a tutti e tre
+// direbbe solo che sappiamo scaricare tre volte la stessa cosa.
+//
+// QUALE dei tre pero' non e' fisso: lo decide loadCatalog scegliendo il primo
+// che ha davvero risposto. Cablarlo su BACKENDS[0] significava che, con Python
+// giu' e gli altri due vivi, il catalogo si popolava e le card di .NET e Go
+// funzionavano, ma ogni anteprima e ogni "Originale" puntavano all'app morta:
+// pagina piena di icone di immagine rotta proprio nello scenario che il
+// controllo multi-backend esiste per far emergere.
+let sourceBackend = BACKENDS[0];
+
 const sourceUrl = (image) =>
-  `${api(BACKENDS[0], 'source')}?${buildQuery({ image })}`;
+  `${api(sourceBackend, 'source')}?${buildQuery({ image })}`;
+
+// I nomi dei file finiscono dentro innerHTML: passano da qui prima, cosi' un
+// nome con `&` o `<` non corrompe il markup. Sono nomi che scegliamo noi, non
+// input di un utente — il punto non e' un attacco, e' che un file chiamato
+// "prima & dopo.jpg" renderebbe la pagina in modo sbagliato senza dirlo.
+const escapeHtml = (value) =>
+  String(value).replace(
+    /[&<>"']/g,
+    (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]
+  );
+
+// Gli object URL creati per le immagini dei risultati. Il browser li tiene vivi
+// finche' non si revocano esplicitamente: replaceChildren() stacca i nodi dal
+// DOM ma NON libera il blob dietro. In una demo che si rilancia dieci volte
+// sarebbero dieci JPEG pieni per backend a restare in memoria per tutta la
+// sessione.
+let liveObjectUrls = [];
+
+function revokeLiveObjectUrls() {
+  for (const url of liveObjectUrls) URL.revokeObjectURL(url);
+  liveObjectUrls = [];
+}
 
 function setStatus(message, kind = '') {
   els.status.textContent = message;
@@ -91,6 +122,7 @@ async function loadCatalog() {
 
   const divergent = reachable.filter((r) => r.images.length !== names.size);
 
+  sourceBackend = reachable[0].backend;
   sourceBytes = new Map(reachable[0].images.map((i) => [i.name, i.bytes]));
 
   els.images.replaceChildren(
@@ -101,10 +133,10 @@ async function loadCatalog() {
       // deselezionato costringerebbe a un click in piu' prima di far vedere
       // qualcosa, che dal vivo e' un tempo morto.
       option.innerHTML = `
-        <input type="checkbox" value="${name}" ${index === 0 ? 'checked' : ''}>
-        <img src="${sourceUrl(name)}" alt="" loading="lazy">
+        <input type="checkbox" value="${escapeHtml(name)}" ${index === 0 ? 'checked' : ''}>
+        <img src="${escapeHtml(sourceUrl(name))}" alt="" loading="lazy">
         <span class="option-text">
-          <span class="option-name">${name}</span>
+          <span class="option-name">${escapeHtml(name)}</span>
           <span class="option-size">${formatBytes(sourceBytes.get(name))}</span>
         </span>
       `;
@@ -160,7 +192,9 @@ async function runOne(backend, image, params) {
   const imageResponse = await fetch(imageUrl, { method: 'POST' });
   if (!imageResponse.ok) throw new Error(`HTTP ${imageResponse.status} sull'immagine`);
 
-  return { metrics, objectUrl: URL.createObjectURL(await imageResponse.blob()) };
+  const objectUrl = URL.createObjectURL(await imageResponse.blob());
+  liveObjectUrls.push(objectUrl);
+  return { metrics, objectUrl };
 }
 
 // --- Rendering ---------------------------------------------------------------
@@ -170,7 +204,7 @@ function sourceCard(image) {
   card.className = 'card source';
   card.innerHTML = `
     <h3>Originale <span class="runtime">sorgente</span></h3>
-    <img src="${sourceUrl(image)}" alt="Immagine di partenza, prima del resize">
+    <img src="${escapeHtml(sourceUrl(image))}" alt="Immagine di partenza, prima del resize">
     <dl>
       <dt>Peso</dt><dd>${formatBytes(sourceBytes.get(image))}</dd>
       <dt>Nota</dt><dd class="muted">Lo stesso file per i tre worker.</dd>
@@ -215,7 +249,7 @@ function createGroup(image) {
 
   const title = document.createElement('h2');
   title.className = 'group-title';
-  title.innerHTML = `${image} <span class="muted">${formatBytes(sourceBytes.get(image))}</span>`;
+  title.innerHTML = `${escapeHtml(image)} <span class="muted">${formatBytes(sourceBytes.get(image))}</span>`;
 
   const row = document.createElement('div');
   row.className = 'row';
@@ -248,6 +282,9 @@ els.form.addEventListener('submit', async (event) => {
   };
 
   els.run.disabled = true;
+  // Prima di buttare via i risultati precedenti, libera i blob che tenevano
+  // vive le loro immagini: staccare i nodi dal DOM da solo non lo fa.
+  revokeLiveObjectUrls();
   els.results.replaceChildren();
 
   let failures = 0;

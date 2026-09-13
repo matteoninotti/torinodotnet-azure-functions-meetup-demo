@@ -42,20 +42,41 @@ echo "In attesa dello zero su ${APP_NAME} (finestra da ${WINDOW_START})"
 
 consecutive_quiet=0
 for _ in $(seq 1 "$MAX_MINUTES"); do
-  last_sample=$(az monitor metrics list \
+  # `|| true` cattura SOLO l'uscita del comando az, non la sua stdout: prima
+  # dava lo stesso trattamento a "az e' fallito" e a "az ha risposto senza
+  # campioni", e i due casi non sono la stessa informazione. Un errore
+  # transitorio (throttling, token scaduto, blip di rete) diventava una
+  # stringa vuota, che il controllo sotto legge come "zero istanze confermato"
+  # — al primo giro, senza passare dal doppio controllo che l'altro ramo
+  # richiede. E' esattamente la precondizione che questo script esiste per
+  # verificare, resa falsa da un errore di rete invece che da un'istanza viva.
+  if ! last_sample=$(az monitor metrics list \
     --resource "$APP_ID" \
     --metric InstanceCount \
     --interval PT1M \
     --aggregation Count \
     --start-time "$WINDOW_START" \
-    --query "value[0].timeseries[0].data[?count!=null] | [-1].timeStamp" -o tsv 2>/dev/null || true)
+    --query "value[0].timeseries[0].data[?count!=null] | [-1].timeStamp" -o tsv 2>&1); then
+    now=$(date -u +%H:%M:%SZ)
+    echo "${now} | comando az fallito, poll scartato (non e' ne' conferma ne' smentita): ${last_sample}" >&2
+    sleep "$POLL_SECONDS"
+    continue
+  fi
 
   now=$(date -u +%H:%M:%SZ)
 
   if [ -z "$last_sample" ] || [ "$last_sample" = "None" ]; then
-    echo "${now} | nessun campione nella finestra: zero istanze"
-    echo "ZERO CONFERMATO dopo $(( ($(date -u +%s) - START_EPOCH) / 60 )) minuti di attesa"
-    exit 0
+    # Nessun campione nella finestra e' un segnale forte, ma passa comunque
+    # dallo stesso contatore di conferme dell'altro ramo: una sola lettura,
+    # per quanto pulita, resta una sola lettura.
+    consecutive_quiet=$((consecutive_quiet + 1))
+    echo "${now} | nessun campione nella finestra (conferma ${consecutive_quiet}/2)"
+    if [ "$consecutive_quiet" -ge 2 ]; then
+      echo "ZERO CONFERMATO dopo $(( ($(date -u +%s) - START_EPOCH) / 60 )) minuti di attesa"
+      exit 0
+    fi
+    sleep "$POLL_SECONDS"
+    continue
   fi
 
   # macOS (BSD date) e Linux (GNU date) parsano diversamente: si provano entrambi.
