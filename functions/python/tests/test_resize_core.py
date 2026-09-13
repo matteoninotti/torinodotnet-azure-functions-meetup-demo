@@ -21,6 +21,17 @@ with open(CONFORMANCE, encoding="utf-8") as handle:
     HEIGHT_CASES = json.load(handle)["cases"]
 
 
+def test_conformance_file_is_not_empty():
+    """Se i casi condivisi si svuotassero, il test parametrizzato sotto
+    sparirebbe senza fallire: zero casi eseguiti e suite verde.
+
+    Lo stesso guardrail esiste gia' in .NET (ConformanceFileIsNotEmpty) e in Go
+    (TestTargetHeightMatchesConformance): mancava solo qui, ed e' proprio il
+    linguaggio da cui i casi sono nati.
+    """
+    assert len(HEIGHT_CASES) == 12
+
+
 @pytest.mark.parametrize("case", HEIGHT_CASES, ids=lambda c: f"{c['src_width']}x{c['src_height']}->{c['dst_width']}")
 def test_target_height_matches_conformance(case):
     got = resize_core.target_height(case["src_width"], case["src_height"], case["dst_width"])
