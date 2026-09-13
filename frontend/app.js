@@ -1,9 +1,12 @@
 // Pannello dimostrativo: manda la STESSA richiesta ai tre worker e mostra i
-// tre risultati affiancati.
+// risultati affiancati, per una o piu' immagini insieme.
 //
 // Non misura niente. I percentili li producono k6 e Application Insights; qui
 // si vede solo che i tre backend rispondono allo stesso contratto e che le
-// immagini che tornano sono equivalenti.
+// immagini che tornano sono equivalenti. Il tempo sulle card e' reale — e' il
+// cronometro interno alla pipeline, la stessa strumentazione delle misure vere
+// — ma un singolo click non ha ripetizioni ne' percentili, quindi non e' una
+// misura statisticamente valida.
 
 const BACKENDS = [
   { id: 'python', label: 'Python', host: 'torinodotnet-python.azurewebsites.net' },
@@ -13,7 +16,7 @@ const BACKENDS = [
 
 const els = {
   form: document.getElementById('controls'),
-  image: document.getElementById('image'),
+  images: document.getElementById('images'),
   width: document.getElementById('width'),
   quality: document.getElementById('quality'),
   count: document.getElementById('count'),
@@ -23,6 +26,14 @@ const els = {
 };
 
 const api = (backend, path) => `https://${backend.host}/api/${path}`;
+
+const buildQuery = (params) => new URLSearchParams(params).toString();
+
+// L'originale si chiede sempre a UN SOLO backend: e' lo stesso file byte per
+// byte nei tre pacchetti di deploy (verificato, D97), quindi chiederlo a tutti
+// e tre direbbe solo che sappiamo scaricare tre volte la stessa cosa.
+const sourceUrl = (image) =>
+  `${api(BACKENDS[0], 'source')}?${buildQuery({ image })}`;
 
 function setStatus(message, kind = '') {
   els.status.textContent = message;
@@ -62,6 +73,7 @@ async function loadCatalog() {
     .filter(Boolean);
 
   if (reachable.length === 0) {
+    els.images.innerHTML = '';
     setStatus(
       'Nessuno dei tre backend ha risposto. Se la console mostra un errore CORS, ' +
         "l'origine di questa pagina non e' ancora nell'allowlist delle function app.",
@@ -71,7 +83,7 @@ async function loadCatalog() {
   }
 
   // Solo le immagini presenti su TUTTI i backend raggiungibili finiscono nel
-  // menu: offrirne una che un backend non ha significherebbe far scegliere
+  // selettore: offrirne una che un backend non ha significherebbe far scegliere
   // all'utente un 404 garantito.
   const names = reachable
     .map((r) => new Set(r.images.map((i) => i.name)))
@@ -81,14 +93,25 @@ async function loadCatalog() {
 
   sourceBytes = new Map(reachable[0].images.map((i) => [i.name, i.bytes]));
 
-  els.image.innerHTML = '';
-  [...names].sort().forEach((name) => {
-    const option = document.createElement('option');
-    option.value = name;
-    option.textContent = `${name} — ${formatBytes(sourceBytes.get(name))}`;
-    els.image.append(option);
-  });
-  els.image.disabled = false;
+  els.images.replaceChildren(
+    ...[...names].sort().map((name, index) => {
+      const option = document.createElement('label');
+      option.className = 'option';
+      // La prima parte gia' selezionata: aprire il pannello e trovare tutto
+      // deselezionato costringerebbe a un click in piu' prima di far vedere
+      // qualcosa, che dal vivo e' un tempo morto.
+      option.innerHTML = `
+        <input type="checkbox" value="${name}" ${index === 0 ? 'checked' : ''}>
+        <img src="${sourceUrl(name)}" alt="" loading="lazy">
+        <span class="option-text">
+          <span class="option-name">${name}</span>
+          <span class="option-size">${formatBytes(sourceBytes.get(name))}</span>
+        </span>
+      `;
+      return option;
+    })
+  );
+
   els.run.disabled = false;
 
   const warnings = [];
@@ -99,19 +122,20 @@ async function loadCatalog() {
     );
   }
   setStatus(
-    warnings.length ? `⚠️ ${warnings.join(' · ')}` : `${names.size} immagini disponibili su tutti e tre.`,
+    warnings.length
+      ? `⚠️ ${warnings.join(' · ')}`
+      : `${names.size} immagini disponibili su tutti e tre.`,
     warnings.length ? 'warn' : ''
   );
 }
 
+const selectedImages = () =>
+  [...els.images.querySelectorAll('input[type="checkbox"]:checked')].map((input) => input.value);
+
 // --- Esecuzione --------------------------------------------------------------
 
-function buildQuery(params) {
-  return new URLSearchParams(params).toString();
-}
-
-async function runOne(backend, params) {
-  const base = { image: params.image, width: params.width, quality: params.quality };
+async function runOne(backend, image, params) {
+  const base = { image, width: params.width, quality: params.quality };
 
   // Due richieste, e la ragione e' che il contratto ne fa due cose diverse:
   // senza `return` l'endpoint risponde JSON con le misure, con `return=image`
@@ -135,96 +159,132 @@ async function runOne(backend, params) {
 
   const imageResponse = await fetch(imageUrl, { method: 'POST' });
   if (!imageResponse.ok) throw new Error(`HTTP ${imageResponse.status} sull'immagine`);
-  const blob = await imageResponse.blob();
 
-  return { metrics, objectUrl: URL.createObjectURL(blob) };
+  return { metrics, objectUrl: URL.createObjectURL(await imageResponse.blob()) };
 }
 
-// --- Immagine sorgente -------------------------------------------------------
+// --- Rendering ---------------------------------------------------------------
 
-// L'originale si chiede a UN SOLO backend, non a tutti e tre: e' lo stesso file
-// byte per byte nei tre pacchetti di deploy — lo verificano i byte del catalogo,
-// che il frontend confronta gia' — e mostrarne tre copie identiche affiancate
-// direbbe solo che sappiamo scaricare tre volte la stessa cosa.
-//
-// <img src> diretto e nessun fetch: e' un GET, quindi il browser lo carica da
-// solo. Vale anche come prova che l'endpoint e' davvero un GET semplice e non
-// una richiesta che ha bisogno di preflight.
-function renderSource(params) {
-  const backend = BACKENDS[0];
-  const url = `${api(backend, 'source')}?${buildQuery({ image: params.image })}`;
-  const before = sourceBytes.get(params.image);
-
+function sourceCard(image) {
   const card = document.createElement('article');
   card.className = 'card source';
   card.innerHTML = `
-    <h2>Originale <span class="runtime">sorgente</span></h2>
-    <img src="${url}" alt="Immagine di partenza, prima del resize">
+    <h3>Originale <span class="runtime">sorgente</span></h3>
+    <img src="${sourceUrl(image)}" alt="Immagine di partenza, prima del resize">
     <dl>
-      <dt>Peso</dt><dd>${formatBytes(before)}</dd>
+      <dt>Peso</dt><dd>${formatBytes(sourceBytes.get(image))}</dd>
       <dt>Nota</dt><dd class="muted">Lo stesso file per i tre worker.</dd>
     </dl>
   `;
   return card;
 }
 
-function renderPending(backend) {
+function pendingCard(backend) {
   const card = document.createElement('article');
   card.className = 'card pending';
-  card.id = `card-${backend.id}`;
-  card.innerHTML = `<h2>${backend.label}</h2><p class="muted">in corso… (a freddo puo' richiedere qualche secondo)</p>`;
+  card.innerHTML = `<h3>${backend.label}</h3><p class="muted">in corso… (a freddo puo' richiedere qualche secondo)</p>`;
   return card;
 }
 
-function renderResult(backend, { metrics, objectUrl }, params) {
-  const card = document.getElementById(`card-${backend.id}`);
-  const before = sourceBytes.get(params.image);
+function fillResult(card, backend, { metrics, objectUrl }, image) {
+  const before = sourceBytes.get(image);
   const ratio = before ? `${((1 - metrics.output_bytes / before) * 100).toFixed(0)}% in meno` : '—';
 
   card.className = 'card';
   card.innerHTML = `
-    <h2>${backend.label} <span class="runtime">${metrics.runtime}</span></h2>
+    <h3>${backend.label} <span class="runtime">${metrics.runtime}</span></h3>
     <img src="${objectUrl}" alt="Risultato del resize su ${backend.label}">
     <dl>
       <dt>Dimensioni</dt><dd>${metrics.width} × ${metrics.height}</dd>
-      <dt>Peso</dt><dd>${formatBytes(before)} → ${formatBytes(metrics.output_bytes)} <span class="muted">(${ratio})</span></dd>
+      <dt>Peso</dt><dd>${formatBytes(metrics.output_bytes)} <span class="muted">(${ratio})</span></dd>
       <dt>Pipeline</dt><dd>${Math.round(metrics.total_ms).toLocaleString('it-IT')} ms <span class="muted">× ${metrics.count}</span></dd>
     </dl>
   `;
 }
 
-function renderError(backend, error) {
-  const card = document.getElementById(`card-${backend.id}`);
+function fillError(card, backend, error) {
   card.className = 'card failed';
-  card.innerHTML = `<h2>${backend.label}</h2><p class="error">${error.message}</p>`;
+  card.innerHTML = `<h3>${backend.label}</h3><p class="error">${error.message}</p>`;
+}
+
+// Un blocco per immagine: intestazione col nome del file e dentro le quattro
+// card — l'originale e i tre worker.
+function createGroup(image) {
+  const group = document.createElement('section');
+  group.className = 'group';
+
+  const title = document.createElement('h2');
+  title.className = 'group-title';
+  title.innerHTML = `${image} <span class="muted">${formatBytes(sourceBytes.get(image))}</span>`;
+
+  const row = document.createElement('div');
+  row.className = 'row';
+  row.append(sourceCard(image));
+
+  const cards = new Map();
+  for (const backend of BACKENDS) {
+    const card = pendingCard(backend);
+    cards.set(backend.id, card);
+    row.append(card);
+  }
+
+  group.append(title, row);
+  return { group, cards };
 }
 
 els.form.addEventListener('submit', async (event) => {
   event.preventDefault();
+
+  const images = selectedImages();
+  if (images.length === 0) {
+    setStatus('Seleziona almeno un’immagine.', 'warn');
+    return;
+  }
+
   const params = {
-    image: els.image.value,
     width: els.width.value,
     quality: els.quality.value,
     count: els.count.value,
   };
-  if (!params.image) return;
 
   els.run.disabled = true;
-  setStatus('Richiesta inviata ai tre backend…');
-  els.results.replaceChildren(renderSource(params), ...BACKENDS.map(renderPending));
+  els.results.replaceChildren();
 
-  await Promise.all(
-    BACKENDS.map(async (backend) => {
-      try {
-        renderResult(backend, await runOne(backend, params), params);
-      } catch (error) {
-        renderError(backend, error);
-      }
-    })
-  );
+  let failures = 0;
+
+  // Le immagini si eseguono UNA PER VOLTA, i tre backend in parallelo fra loro.
+  //
+  // Non e' una semplificazione: con la concorrenza server-side a 1, mandare tre
+  // immagini insieme darebbe a ciascuna app tre richieste simultanee, quindi due
+  // istanze da far nascere e due cold start da guardare in silenzio davanti al
+  // pubblico. Sequenziale, ogni worker resta sulla sua istanza calda. In piu' i
+  // blocchi compaiono a mano a mano, invece che tutti insieme dopo l'attesa.
+  for (const [index, image] of images.entries()) {
+    setStatus(`Immagine ${index + 1} di ${images.length}: ${image}…`);
+
+    const { group, cards } = createGroup(image);
+    els.results.append(group);
+
+    await Promise.all(
+      BACKENDS.map(async (backend) => {
+        const card = cards.get(backend.id);
+        try {
+          fillResult(card, backend, await runOne(backend, image, params), image);
+        } catch (error) {
+          failures += 1;
+          fillError(card, backend, error);
+        }
+      })
+    );
+  }
 
   els.run.disabled = false;
-  setStatus('Fatto. I tre risultati non sono byte per byte identici, ed e’ atteso: encoder diversi.');
+  setStatus(
+    failures > 0
+      ? `⚠️ ${failures} richieste fallite su ${images.length * BACKENDS.length}.`
+      : 'Fatto. I risultati non sono byte per byte identici fra i tre, ed e’ atteso: encoder diversi.',
+    failures > 0 ? 'warn' : ''
+  );
 });
 
 els.run.disabled = true;

@@ -8,23 +8,26 @@
 </head>
 <body>
   <header>
-    <h1>Stessa immagine, tre runtime</h1>
+    <h1>Comparatore resize e compressione JPEG</h1>
     <p class="subtitle">
-      La stessa richiesta di resize inviata a tre Azure Functions identiche nel contratto
-      e diverse nel linguaggio. I numeri qui sotto sono indicativi: le misure vere le
-      producono il generatore di carico e Application Insights.
+      La stessa richiesta di resize inviata a tre Azure Functions identiche nel contratto,
+      diverse nel linguaggio. Il tempo mostrato su ogni card è reale — la stessa
+      strumentazione server-side usata nelle misure vere — ma un singolo click non è una
+      misura statisticamente valida: niente ripetizioni, niente percentili, carico non
+      controllato. Quelle le producono k6 e Application Insights.
     </p>
   </header>
 
   <form id="controls" autocomplete="off">
-    <div class="field">
-      <label for="image">Immagine</label>
-      <!-- Popolata da GET /api/images: i nomi dei file non sono mai cablati qui,
-           cosi' cambiare il pool con un redeploy aggiorna anche questo menu. -->
-      <select id="image" disabled>
-        <option>caricamento…</option>
-      </select>
-    </div>
+    <fieldset class="field field-images">
+      <legend>Immagini</legend>
+      <!-- Popolato da GET /api/images: i nomi dei file non sono mai cablati qui,
+           cosi' cambiare il pool con un redeploy aggiorna anche questo selettore.
+           Le anteprime arrivano da GET /api/source (D97). -->
+      <div id="images" class="options">
+        <p class="muted">caricamento…</p>
+      </div>
+    </fieldset>
 
     <div class="field">
       <label for="width">Larghezza</label>

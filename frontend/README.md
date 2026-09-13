@@ -10,7 +10,10 @@ Metriche e percentili **non** passano da qui: li producono il generatore di cari
 
 ## Come funziona
 
-- Il menu delle immagini si popola da `GET /api/images` (D34), interrogando **tutti e tre** i backend e offrendo solo i nomi presenti su tutti: un elenco divergente è un pacchetto di deploy partito senza le immagini, e va visto subito invece che scoprirlo con un 404 al primo resize.
+- Il selettore si popola da `GET /api/images` (D34), interrogando **tutti e tre** i backend e offrendo solo i nomi presenti su tutti: un elenco divergente è un pacchetto di deploy partito senza le immagini, e va visto subito invece che scoprirlo con un 404 al primo resize.
+- È a **checkbox**, non a tendina: si possono eseguire più immagini insieme, con un blocco di risultati per ciascuna. Serve ad affiancare baseline e progressive, che è un contenuto reale delle slide (D8).
+- Le **anteprime** accanto alle checkbox arrivano da `GET /api/source`. ⚠️ Sono i JPEG originali da 220–280 kB, non thumbnail ottimizzate: popolare il selettore costa fino a ~750 kB a caricamento. Compromesso accettato per una demo.
+- Le immagini si eseguono **una per volta**, i tre backend in parallelo fra loro. Con la concorrenza server-side a 1, mandarle tutte insieme darebbe a ogni app più richieste simultanee, quindi cold start da guardare in silenzio davanti al pubblico.
 - L'originale arriva da `GET /api/source?image=<nome>` (vedi sotto).
 - Ogni esecuzione manda **due** richieste per backend: una senza `return` per le misure in JSON, una con `return=image&count=1` per il JPEG da mostrare. Due e non una perché il contratto risponde o l'uno o l'altro; `count=1` sull'immagine perché `count` è una manopola sul tempo e non sul risultato.
 
