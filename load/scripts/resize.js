@@ -11,11 +11,15 @@
 // sequenziale, dove un generatore di carico aggiungerebbe solo rumore.
 //
 // Tutti i parametri arrivano da variabile d'ambiente (D15): niente valori
-// cablati, perche' count e RPS vanno tarati dopo un run preliminare e la
-// taratura definitiva richiede tutti e tre i worker (D43).
+// cablati, perche' count e RPS andavano tarati dopo un run preliminare e la
+// taratura definitiva richiedeva tutti e tre i worker (D43).
 //
-//   k6 run -e LANGUAGE=python -e RPS=5 -e DURATION=60s -e COUNT=1 \
-//          load/scripts/resize.js
+// Valori definitivi dei run finali, identici per Metrica 1 e Metrica 3 e per i
+// tre linguaggi (D89, D92). I default qui sotto NON sono questi: passarli
+// esplicitamente e' cio' che rende il comando leggibile in cronologia.
+//
+//   k6 run -e LANGUAGE=python -e RPS=10 -e DURATION=60s -e COUNT=80 \
+//          -e PRE_ALLOCATED_VUS=300 -e MAX_VUS=400 load/scripts/resize.js
 //
 // Le richieste NON usano `return=image`: la banda di download dell'immagine
 // entrerebbe nella latenza client, che e' esattamente il rumore che la forma
@@ -44,6 +48,14 @@ const DURATION = __ENV.DURATION || '60s';
 // k6 non riesce a mantenere il tasso richiesto e lo segnala come dropped
 // iterations — che e' un fallimento del generatore, non del backend, e va
 // distinto (vedi la nota in fondo).
+//
+// ⚠️ Per i run finali il default NON basta, e il conto giusto non e' RPS x
+// durata della RICHIESTA ma RPS x durata osservata dal CLIENT mentre la
+// piattaforma scala: durante la rampa arriva a 30-40s. Con 120 VU il run su Go
+// ha prodotto 13 dropped iterations; con 300 nessuna (D90). Si passano 300 a
+// tutti e tre i linguaggi, anche dove ne basterebbero meno: un generatore
+// configurato diversamente per ciascun backend sarebbe un'asimmetria in piu'
+// da dichiarare, in cambio di niente.
 const PRE_ALLOCATED_VUS = Number(__ENV.PRE_ALLOCATED_VUS || Math.ceil(RPS * 10));
 const MAX_VUS = Number(__ENV.MAX_VUS || PRE_ALLOCATED_VUS * 2);
 

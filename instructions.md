@@ -33,7 +33,7 @@ Realismo per la **scelta della libreria**, simmetria per la **configurazione del
 
 ## Architettura sperimentale (decisa — non cambiare senza discuterne prima)
 
-- **Frontend fisso**: Static Web App. Mostra l'immagine prima/dopo il resize. Metriche e percentili sono delegati al generatore di carico e ad Application Insights.
+- **Frontend fisso**: Static Web App in HTML + JS senza framework, con un selettore che punta la stessa richiesta a tutti e tre i backend (D88). Mostra l'immagine prima/dopo il resize. Metriche e percentili sono delegati al generatore di carico e ad Application Insights.
 - **Backend variabile**: solo l'Azure Function cambia tra i linguaggi testati
 - **Nessun database**. Workload CPU-bound e in-memory.
 - **Piano**: Flex Consumption (obbligatorio — è l'unico che supporta Go)
@@ -137,7 +137,8 @@ POST /api/resize?image=sample.jpg&count=N&width=800&quality=80
 | Qualità JPEG | **80** (mai ≥ 98) | Trappola SIMD, vedi Gotchas |
 | Filtro resampling | **Bilineare** | Unico filtro presente in tutti e tre |
 | Immagini di test | **tre JPEG**, iniettate a deploy-time | Scelte in Fase 1 (D33, D36); l'elenco vive in `GET /api/images`, non qui |
-| `count=N` | **provvisorio: 75** | Deve portare anche la più veloce sopra 1s: taratura definitiva in Fase 7, coi tre worker (D43, D49) |
+| `count=N` | **80** | Tarato coi tre worker deployati: porta anche la più veloce sopra 1s di durata fatturata (D89, sostituisce il provvisorio 75 di D49) |
+| Carico dei run finali | **10 req/s per 60s** | Sostenibile dal più lento; 300 VU preallocati nel generatore (D89, D90) |
 
 **Perché JPEG e non PNG.** Nessuno dei due elimina l'asimmetria nativo/managed, la sposta soltanto: con JPEG è sul codec, con PNG sulla compressione DEFLATE. Si sceglie JPEG perché è ciò che fa realmente un image-CDN su foto, perché il lavoro CPU è genuinamente image-specific (DCT, quantizzazione, Huffman) invece che compressione generica, e perché l'asimmetria è documentabile.
 
@@ -249,7 +250,11 @@ Motivo secondario e dirimente: [Azure Load Testing non supporta framework divers
 Scartato: runner GitHub Actions come generatore (rete e risorse non controllate).
 
 ### Metrica 1 — Throughput a regime
-Carico a **tasso costante** (arrival rate) identico per i tre linguaggi, a regime. Percentili client-side da k6, durata server-side da Application Insights.
+Carico a **tasso costante** (arrival rate) identico per i tre linguaggi, a regime: **10 req/s per 60s, `count=80`, 300 VU preallocati** (D89).
+
+⚠️ **Serve una finestra di pre-riscaldamento, e va buttata via.** Con concorrenza 1 un linguaggio lento occupa a lungo ogni istanza, e la piattaforma impiega decine di secondi ad arrivare alla capacità richiesta: nel run di validazione Go le richieste completate per bin da 10s sono state 26, 60, 90, 95, 101, 114 — il regime arriva solo verso il quarantesimo secondo, e su una finestra di 60s la rampa domina la misura. La finestra misurata deve cominciare quando l'app è già alla capacità di regime, preceduta da un run identico che si scarta (D90). La rampa è oggetto della Metrica 3, non di questa.
+
+Percentili client-side da k6, durata server-side da Application Insights.
 
 ### Metrica 2 — Cold start isolato
 **Strumento: script sequenziale + Application Insights.**
@@ -270,7 +275,7 @@ Il comportamento della piattaforma è documentato in [Flex Consumption plan § S
 
 **Protocollo:**
 1. App a zero istanze.
-2. Burst a tasso costante (arrival rate) verso il target di RPS.
+2. Burst a tasso costante (arrival rate): **gli stessi identici parametri della Metrica 1** — 10 req/s, 60s, `count=80` — perché le due metriche devono differire solo per lo stato iniziale dell'app, altrimenti la loro differenza non stima più l'effetto del cold start (D92). I 50 req/s provvisori di D57 non sono eseguibili con `count=80`: chiederebbero a Go ~264 istanze concorrenti, oltre il tetto di 200 per app e oltre la quota regionale di 250 core.
 3. Registrare i percentili di latenza **secondo per secondo** per i primi 60–120 secondi.
 4. Metrica derivata: **time-to-steady-state**.
 5. Tre ripetizioni per linguaggio.
@@ -303,7 +308,8 @@ Tre formulazioni ufficiali convergono ma non chiudono la questione:
 6. Tre ripetizioni. Farlo su **Python**, che ha il cold start più lungo e quindi il segnale più forte.
 
 ### Budget — €20 massimo
-- **Azure Functions**: il free grant mensile per sottoscrizione è indicato sulla [pagina pricing](https://azure.microsoft.com/en-us/pricing/details/functions/) (250.000 esecuzioni e 100.000 GB-s in on-demand, al momento della verifica). I test non ci arriveranno vicino.
+- **Azure Functions**: il free grant mensile per sottoscrizione è indicato sulla [pagina pricing](https://azure.microsoft.com/en-us/pricing/details/functions/) (250.000 esecuzioni e 100.000 GB-s in on-demand, al momento della verifica). **Il margine non è più comodo come sembrava**: con `count=80` il worker Go impiega ~5,2s per richiesta, e la campagna di misura completa è stimata intorno ai 57.000 GB-s, cioè oltre metà del grant (D89). Va controllato a ogni giro, non dato per scontato.
+- ⚠️ **Prezzo al GB-secondo oltre il grant: FONTE UFFICIALE NON TROVATA.** L'[API dei prezzi retail](https://prices.azure.com/api/retail/prices) restituisce i meter di Flex Consumption a `0.0` in ogni regione provata, quindi il feed non li espone e la pagina pricing va letta a mano. Finché il prezzo non è verificato, il criterio di sicurezza è restare dentro il free grant.
 - **ACA Job**: piano Consumption, pagato al secondo solo durante l'esecuzione.
 - **Azure Load Testing** (solo per l'eventuale run dimostrativo): ⚠️ **URL DELLA PAGINA PRICING DA SALVARE**. Dati raccolti finora: nessun canone mensile sulla risorsa (la fee di $10/mese è stata rimossa), $0,15/VUH fino a 10.000 VUH mensili, e un addebito minimo per run introdotto dal 1° marzo 2026. **Da riverificare sulla pagina ufficiale prima di usarli.**
 - **Regola operativa**: iterare con k6 locale, usare l'ACA Job solo per i run che finiranno nelle slide.
@@ -451,11 +457,11 @@ Tutti da [Go developer reference](https://learn.microsoft.com/en-us/azure/azure-
 ## Punti ancora aperti
 1. **Il tempo di cold start / inizializzazione è fatturato?** → Metrica 4, sezione Metodologia di misurazione. Nessuna dichiarazione ufficiale esplicita; l'esperimento va eseguito.
 2. ✅ **Immagini di test: scelte** (tre, decision log D33/D36). Restano fuori dal repo e vengono iniettate nel pacchetto a deploy-time.
-3. 🟡 **`count=N`: valore provvisorio 75**, tarato su Python (D49). Definitivo in Fase 7, quando esistono tutti e tre i worker: il criterio è che **la più veloce delle tre** superi 1s, e quale sia è uno dei risultati dell'esperimento. ⚠️ Scoperta collegata: `count` **non è un moltiplicatore lineare** — la prima iterazione costa ~4× quelle a regime.
-4. 🟡 **RPS target: provvisori 10 req/s per Metrica 1 e 50 req/s per Metrica 3**, entrambi misurati (D54, D57). Definitivi in Fase 7 per lo stesso motivo del punto 3.
+3. ✅ **`count=N`: definitivo 80** (D89), tarato coi tre worker deployati sul criterio della durata **fatturata** sopra 1s. Il risultato della taratura è a sua volta un contenuto del talk: **Go è il più lento dei tre, di circa 3,8×** (65,2 ms per iterazione contro i 17,3 di Python e i 16,2 di .NET), mentre Python e .NET sono appaiati. ⚠️ Scoperta collegata: `count` **non è un moltiplicatore lineare** — la prima iterazione costa ~4× quelle a regime.
+4. ✅ **RPS target: definitivo 10 req/s per 60s, identico per Metrica 1 e Metrica 3** (D89, D92). I 50 req/s provvisori della Metrica 3 (D57) erano misurati su Python a `count=75` e non sono eseguibili col worker Go nel confronto, né per capacità né per budget.
 5. **URL da recuperare** e incollare inline: libjpeg-turbo SIMD, ImageSharp SIMD, licensing Six Labors, pricing Azure Load Testing, date di supporto .NET, filtri Pillow/ImageSharp
 6. 🟡 Flag della dashboard web di k6: su **k6 2.2.0** (la versione installata) `k6 run --help` non elenca nessun flag di dashboard e `K6_WEB_DASHBOARD=true` non produce output che la menzioni. ⚠️ **FONTE UFFICIALE NON TROVATA** per questa versione: non è chiaro se la funzione sia stata rimossa, spostata o rinominata. Resta aperto, ma è un `[C]`.
-7. **Smoke test preliminare del worker Go** al livello di carico scelto per i run finali. Essendo in public preview, eventuali errori sotto carico sarebbero un artefatto della preview, non una caratteristica di Go, e andrebbero dichiarati.
+7. ✅ **Smoke test del worker Go: superato** al carico definitivo (D91) — 601 iterazioni su 601, zero fallimenti lato client e lato server. Resta da dichiarare in slide la coda sotto scale-out: il p99 del solo tempo di pipeline sale a 16,6s contro una mediana di 5,3s, su istanze appena avviate.
 
 ---
 

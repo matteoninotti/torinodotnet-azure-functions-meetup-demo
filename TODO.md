@@ -83,18 +83,19 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 
 ## Fase 6 — Frontend
 
-- [ ] **[M] Static Web App** che mostra prima/dopo il resize usando `return=image`.
-- [ ] **[M] Decidere se punta a tutti e tre i backend** (selettore di linguaggio) o a uno solo. Non ancora deciso.
+- [ ] **[M] Static Web App** in HTML + JS senza framework (D88), che mostra prima/dopo il resize usando `return=image`.
+- [x] **[M] Decidere se punta a tutti e tre i backend** (selettore di linguaggio) o a uno solo. ✅ Tutti e tre, con selettore di linguaggio (D88): il contratto è già identico sui tre worker, quindi il frontend cambia solo l'host della `fetch`.
+- [ ] **[M] Selettore di linguaggio** che manda la stessa richiesta ai tre backend (D88).
 - [ ] **[M] Selettore immagini** popolato dinamicamente da `GET /api/images` (D34) — mai hardcodare i nomi dei file, così cambiare il pool via redeploy aggiorna anche il frontend senza toccarlo.
-- [ ] **[S] Configurare il CORS** con l'origine della Static Web App (D12). Spostato da Fase 2: non serve finché la SWA non esiste.
+- [ ] **[S] Configurare il CORS** con l'origine della Static Web App su **tutte e tre** le Function App (D12, D88). Spostato da Fase 2: non serve finché la SWA non esiste. ⚠️ È una modifica al Bicep, e per D72 un deploy dell'infrastruttura scrive su tutte le app: va fatto **prima** che cominci la campagna di misura, mai nel mezzo.
 - [ ] **[M] CORS** verificato dal browser, non solo dalla configurazione.
 
 ## Fase 7 — Run finali e analisi
 
-- [ ] **[M] Taratura definitiva di `count=N` e dell'RPS target, con tutti e tre i worker deployati** (D43). Va fatta qui e non prima: `count` si dimensiona perché **la più veloce delle tre** superi 1s, e quale sia la più veloce non è deducibile — è uno dei risultati dell'esperimento. Sostituisce i valori provvisori di Fase 3; entrambi vanno scritti nel log, il provvisorio e il definitivo.
+- [x] **[M] Taratura definitiva di `count=N` e dell'RPS target, con tutti e tre i worker deployati** (D43). ✅ `count=80`, 10 req/s per 60s, 300 VU preallocati, identici per Metrica 1 e Metrica 3 (D89, D90, D92). Va fatta qui e non prima: `count` si dimensiona perché **la più veloce delle tre** superi 1s, e quale sia la più veloce non è deducibile — è uno dei risultati dell'esperimento. Sostituisce i valori provvisori di Fase 3; entrambi vanno scritti nel log, il provvisorio e il definitivo.
 - [ ] **[M] Decidere se serve il Container Apps Job con k6** — **da valutare dopo la taratura definitiva qui sopra** (D59), non prima: la domanda è se il Mac regga il tasso finale della Metrica 3 senza diventare lui il collo di bottiglia, e quel tasso non esiste finché i tre worker non sono misurati. Dato parziale: a 50 req/s con 500 VU il Mac ha retto senza una `dropped_iteration` (D57). Se serve: `replicaRetryLimit` a 0, `replicaTimeout` dimensionato. ⚠️ La misura non è `dropped_iterations`, che è confusa dal cold start del backend — servono VU fissi e abbondanti, CPU locale osservata, e tasso ottenuto contro tasso richiesto (D59).
-- [ ] **[M] Smoke test del worker Go al carico dei run finali** (D87). Spostato qui da Fase 5: ha senso solo quando l'RPS definitivo esiste, cioè dopo la taratura qui sopra — al livello di carico sbagliato non dimostra niente. Se cede, è un artefatto della public preview e non una caratteristica di Go, e va detto così in slide.
-- [ ] **[M] Metrica 1** — throughput a regime, tasso costante identico per i tre.
+- [x] **[M] Smoke test del worker Go al carico dei run finali** (D87). ✅ Superato: 601 iterazioni su 601, zero fallimenti lato client e lato server (D91). Spostato qui da Fase 5: ha senso solo quando l'RPS definitivo esiste, cioè dopo la taratura qui sopra — al livello di carico sbagliato non dimostra niente. Se cede, è un artefatto della public preview e non una caratteristica di Go, e va detto così in slide.
+- [ ] **[M] Metrica 1** — throughput a regime, tasso costante identico per i tre. ⚠️ Serve una finestra di pre-riscaldamento da scartare prima di quella misurata, altrimenti si misura la rampa di scale-out e non il regime (D90).
 - [ ] **[M] Metrica 2** — cold start isolato: 10 ripetizioni per linguaggio, mediana e p95 (**mai la media**). Serve un piccolo **script di orchestrazione** che ripeta il ciclo `attendi zero → una richiesta cronometrata → leggi la durata server-side`: i pezzi esistono già (`load/scripts/wait-for-zero.sh`, le query in `load/queries/`), manca il ciclo che li mette insieme identico per i tre linguaggi. ⚠️ Costo di agenda: ~5 minuti di attesa per ripetizione, quindi ~2,5 ore per i tre linguaggi (D56).
 - [ ] **[M] Metrica 3** — cold start sotto burst, 3 ripetizioni per linguaggio, percentili secondo per secondo, curve sovrapposte.
 - [ ] **[M] Metrica 4** — il cold start è fatturato? Su Python, `count` tarato sopra 1s, confronto tra `OnDemandFunctionExecutionUnits` e `2048 × durata`. 3 ripetizioni. ⚠️ **Non leggere "quel minuto"**: la metrica ritarda 1-2 minuti e si spalma su più minuti, va sommata su una finestra (D60).

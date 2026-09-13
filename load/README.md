@@ -25,8 +25,11 @@ Sul job ACA, due impostazioni non sono opzionali:
 
 **Metrica 2 non usa k6.** Il cold start isolato è una singola richiesta sequenziale: un generatore di carico ci aggiungerebbe solo rumore.
 
+Il comando dei run finali, identico per i tre linguaggi e per Metrica 1 e Metrica 3 (D89, D92):
+
 ```
-k6 run -e LANGUAGE=python -e RPS=5 -e DURATION=60s -e COUNT=1 load/scripts/resize.js
+k6 run -e LANGUAGE=python -e RPS=10 -e DURATION=60s -e COUNT=80 \
+       -e PRE_ALLOCATED_VUS=300 -e MAX_VUS=400 load/scripts/resize.js
 ```
 
 Tutti i parametri stanno in variabili d'ambiente (D15): `LANGUAGE`, `HOST`, `IMAGE`, `COUNT`, `WIDTH`, `QUALITY`, `RPS`, `DURATION`, `PRE_ALLOCATED_VUS`, `MAX_VUS`.
@@ -42,4 +45,6 @@ Lo script conta anche gli status code uno per uno (`resize_status_codes`), perch
 
 `resize_server_total_ms` è il cronometro interno alla function, riletto dal corpo della risposta: comodo per vedere subito lo scarto con `http_req_duration` senza aspettare l'ingestion di Application Insights. **Non è la fonte autorevole** — quella resta la durata server-side nella telemetria, che è anche ciò che determina il costo.
 
-`count=N`, RPS target e durata restano parametri esterni, tarati dopo un run preliminare e scritti nel decision log (D15): `count` va dimensionato perché **la più veloce delle tre** superi 1s, e quale sia la più veloce non si sa finché non si misura.
+`count=N`, RPS target e durata restano parametri esterni, tarati dopo un run preliminare e scritti nel decision log (D15): `count` va dimensionato perché **la più veloce delle tre** superi 1s, e quale sia la più veloce non si sa finché non si misura. **La taratura è stata fatta** con i tre worker deployati (D89): `count=80`, 10 req/s, 60s.
+
+**La Metrica 1 va preceduta da una finestra di riscaldamento che si scarta.** A questo carico la piattaforma impiega decine di secondi ad arrivare alla capacità richiesta, e su una finestra di 60 secondi la rampa domina la misura: senza riscaldamento si misura lo scale-out, che è oggetto della Metrica 3 (D90).
