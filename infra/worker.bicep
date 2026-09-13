@@ -31,6 +31,9 @@ param perInstanceConcurrency int
 @maxValue(1000)
 param maximumInstanceCount int
 
+@description('Origini ammesse dal CORS. Serve al frontend, che sta su un\'altra origine (D12).')
+param allowedOrigins array
+
 resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' existing = {
   name: storageAccountName
 }
@@ -70,6 +73,19 @@ resource app 'Microsoft.Web/sites@2024-04-01' = {
       // farebbe parte di cio' che si confronta: due worker su HTTP/2 e uno su
       // HTTP/1.1 non sarebbero confrontabili.
       http20Enabled: false
+      // Il frontend sta su *.azurestaticapps.net e chiama *.azurewebsites.net:
+      // per il browser sono due origini diverse, e senza Access-Control-Allow-Origin
+      // la risposta arriva ma non e' leggibile da JavaScript (D12).
+      //
+      // Nota su cosa NON e': qui il CORS non e' un confine di sicurezza. Gli
+      // endpoint sono anonimi e pubblici, e un `curl` non chiede il permesso a
+      // nessuno — il CORS vincola solo il codice che gira dentro una pagina.
+      // Dichiararlo nel Bicep invece che con un comando post-deploy e' lo stesso
+      // ragionamento di D39: una re-provisioning lo RI-imposta.
+      cors: {
+        allowedOrigins: allowedOrigins
+        supportCredentials: false
+      }
       appSettings: [
         {
           name: 'AzureWebJobsStorage'

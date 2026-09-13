@@ -83,12 +83,12 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 
 ## Fase 6 — Frontend
 
-- [ ] **[M] Static Web App** in HTML + JS senza framework (D88), che mostra prima/dopo il resize usando `return=image`.
+- [x] **[M] Static Web App** in HTML + JS senza framework (D88), pubblicata e funzionante. ⚠️ Mostra il **dopo** e il peso prima→dopo, non l'immagine sorgente: per quella servirebbe un endpoint nuovo sui tre worker, ed è una decisione aperta (D95).
 - [x] **[M] Decidere se punta a tutti e tre i backend** (selettore di linguaggio) o a uno solo. ✅ Tutti e tre, con selettore di linguaggio (D88): il contratto è già identico sui tre worker, quindi il frontend cambia solo l'host della `fetch`.
-- [ ] **[M] Selettore di linguaggio** che manda la stessa richiesta ai tre backend (D88).
-- [ ] **[M] Selettore immagini** popolato dinamicamente da `GET /api/images` (D34) — mai hardcodare i nomi dei file, così cambiare il pool via redeploy aggiorna anche il frontend senza toccarlo.
-- [ ] **[S] Configurare il CORS** con l'origine della Static Web App su **tutte e tre** le Function App (D12, D88). Spostato da Fase 2: non serve finché la SWA non esiste. ⚠️ È una modifica al Bicep, e per D72 un deploy dell'infrastruttura scrive su tutte le app: va fatto **prima** che cominci la campagna di misura, mai nel mezzo.
-- [ ] **[M] CORS** verificato dal browser, non solo dalla configurazione.
+- [x] **[M] Selettore di linguaggio** che manda la stessa richiesta ai tre backend (D88). ✅ Esegue sui tre insieme e mostra i risultati affiancati, che dal vivo è più efficace di un selettore a scelta singola.
+- [x] **[M] Selettore immagini** popolato dinamicamente da `GET /api/images` (D34) — mai hardcodare i nomi dei file, così cambiare il pool via redeploy aggiorna anche il frontend senza toccarlo. ✅ Interroga tutti e tre i backend e offre solo i nomi presenti su tutti: un elenco divergente è un pacchetto di deploy incompleto e si vede subito.
+- [x] **[S] Configurare il CORS** con l'origine della Static Web App su **tutte e tre** le Function App (D12, D88). ✅ Dichiarato nel Bicep con l'origine letta dalla risorsa SWA stessa, e deployato prima dell'inizio della campagna di misura come D72 richiede.
+- [x] **[M] CORS** verificato dal browser, non solo dalla configurazione. ✅ La pagina carica il catalogo dalle tre origini ed esegue il resize sui tre. ⚠️ `az resource show` dà `cors: null` anche quando funziona: serve `az functionapp cors show` (D93).
 
 ## Fase 7 — Run finali e analisi
 

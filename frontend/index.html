@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Resize: Python · .NET · Go</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <h1>Stessa immagine, tre runtime</h1>
+    <p class="subtitle">
+      La stessa richiesta di resize inviata a tre Azure Functions identiche nel contratto
+      e diverse nel linguaggio. I numeri qui sotto sono indicativi: le misure vere le
+      producono il generatore di carico e Application Insights.
+    </p>
+  </header>
+
+  <form id="controls" autocomplete="off">
+    <div class="field">
+      <label for="image">Immagine</label>
+      <!-- Popolata da GET /api/images: i nomi dei file non sono mai cablati qui,
+           cosi' cambiare il pool con un redeploy aggiorna anche questo menu. -->
+      <select id="image" disabled>
+        <option>caricamento…</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="width">Larghezza</label>
+      <input type="number" id="width" value="800" min="1" max="10000">
+    </div>
+
+    <div class="field">
+      <label for="quality">Qualità</label>
+      <!-- 95 e non 100: e' il tetto documentato di Pillow, cioe' il minimo
+           comune denominatore fra i tre encoder. -->
+      <input type="number" id="quality" value="80" min="1" max="95">
+    </div>
+
+    <div class="field">
+      <label for="count">Ripetizioni</label>
+      <input type="number" id="count" value="1" min="1" max="10000">
+      <small>Quante volte la pipeline gira dentro la stessa richiesta.</small>
+    </div>
+
+    <button type="submit" id="run">Esegui sui tre</button>
+  </form>
+
+  <p id="status" role="status" aria-live="polite"></p>
+
+  <section id="results" class="results"></section>
+
+  <footer>
+    <p>
+      Demo del talk su Azure Functions al TorinoDotNet. Il pannello non misura:
+      mostra che i tre backend rispondono allo stesso contratto.
+    </p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
