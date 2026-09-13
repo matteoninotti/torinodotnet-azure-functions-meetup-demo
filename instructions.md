@@ -120,6 +120,8 @@ POST /api/resize?image=sample.jpg&count=N&width=800&quality=80
 - **Poche immagini (2–3, pochi MB totali), identiche in tutti e tre i deploy**, così l'offset sul peso del pacchetto è costante.
 - **Risposta di default = JSON** (dimensioni output, byte, hash). `&return=image` per la demo visiva, **mai durante i run di misura**.
 
+Accanto all'endpoint misurato ne stanno tre di servizio, tutti `GET` e tutti fuori dal percorso misurato: `/api/health` (diagnostica), `/api/images` (catalogo per il selettore del frontend, D34) e `/api/source?image=<nome>`, che restituisce i **byte originali** dell'immagine perché il pannello possa mostrare il prima accanto al dopo (D95, D97). Quest'ultimo serve byte già in memoria dall'app init, senza toccare il decoder: la stessa forma `?image=` del resto del contratto, e nessun template di route da far risolvere a tre host diversi.
+
 ### Perché questa forma invece del POST con body
 
 | | POST con body | `?image=` |
