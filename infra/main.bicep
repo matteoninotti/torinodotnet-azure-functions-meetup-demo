@@ -62,6 +62,24 @@ param workers array = [
 // Non sono default ragionevoli: sono vincoli. Cambiarli invalida il confronto
 // tra i tre linguaggi, quindi stanno scritti espliciti invece che ereditati.
 
+@description('Regione della Static Web App. NON puo\' essere Italy North: il tipo di risorsa non esiste li\'.')
+@allowed([
+  'eastus2'
+  'centralus'
+  'westus2'
+  'eastasia'
+  // 'westeurope' e' un valore legittimo del tipo di risorsa ma su questa
+  // sottoscrizione viene rifiutato in fase di deploy: "The selected region is
+  // currently not accepting new customers". Resta fuori dall'elenco perche' un
+  // @allowed che accetta un valore che fallisce sempre e' peggio che inutile.
+])
+param frontendLocation string = 'eastus2'
+
+@description('Origini extra ammesse dal CORS dei worker, oltre alla Static Web App. Il default copre il dev server locale.')
+param extraAllowedOrigins array = [
+  'http://localhost:4280'
+]
+
 @description('2048 MB = 1 vCPU intera. Scendere a 512 non fa risparmiare su workload CPU-bound.')
 @allowed([512, 2048, 4096])
 param instanceMemoryMB int = 2048
@@ -159,6 +177,32 @@ resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = {
 
 // --- Un worker per linguaggio -----------------------------------------------
 
+// La Static Web App NON sta in Italy North insieme ai worker, e non e' una
+// scelta: il tipo di risorsa e' offerto solo in Central US, East US 2, West
+// US 2, West Europe e East Asia. La piu' vicina sarebbe West Europe, che pero'
+// su questa sottoscrizione rifiuta nuovi deploy; resta East US 2.
+//
+// Non tocca le misure — il frontend non e' nel percorso misurato, che va da k6
+// alla function e da li' ad Application Insights — ma va dichiarato, perche'
+// chi guarda la demo dal vivo vede una latenza che comprende un giro in piu'
+// fuori dall'Italia.
+resource frontend 'Microsoft.Web/staticSites@2024-04-01' = {
+  name: '${namePrefix}-frontend'
+  location: frontendLocation
+  sku: {
+    name: 'Free'
+    tier: 'Free'
+  }
+  properties: {
+    // Nessun repositoryUrl: collegarlo a GitHub farebbe generare a Azure un
+    // workflow che deploya a ogni push. Nel resto del progetto il deploy e'
+    // workflow_dispatch per non far partire niente da solo (D44), e il
+    // frontend non fa eccezione: si pubblica con ./scripts/deploy-frontend.sh.
+    stagingEnvironmentPolicy: 'Disabled'
+    allowConfigFileUpdates: true
+  }
+}
+
 module worker 'worker.bicep' = [
   for w in workers: {
     name: 'worker-${w.language}'
@@ -174,6 +218,10 @@ module worker 'worker.bicep' = [
       instanceMemoryMB: instanceMemoryMB
       perInstanceConcurrency: perInstanceConcurrency
       maximumInstanceCount: maximumInstanceCount
+      // L'origine della SWA si legge dalla risorsa qui sopra invece di essere
+      // passata a mano: ARM ordina da solo le due creazioni, e il CORS non puo'
+      // restare disallineato da un hostname cambiato.
+      allowedOrigins: union(['https://${frontend.properties.defaultHostname}'], extraAllowedOrigins)
     }
     dependsOn: [
       deploymentContainers
@@ -185,3 +233,5 @@ output storageAccountName string = storage.name
 output testImagesContainerName string = testImagesContainerName
 output applicationInsightsName string = applicationInsights.name
 output workerHostNames array = [for (w, i) in workers: worker[i].outputs.defaultHostName]
+output frontendName string = frontend.name
+output frontendHostName string = frontend.properties.defaultHostname

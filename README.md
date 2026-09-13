@@ -10,7 +10,7 @@ Materiale della demo per il talk **TorinoDotNet del 30 settembre 2026 @ Toolbox*
 | `shared/conformance/` | Casi di test condivisi che le tre implementazioni devono superare in modo identico. È il modo in cui la simmetria viene *verificata* invece che sperata. |
 | `infra/` | Bicep: piani, function app, storage, Application Insights, Static Web App, Container Apps Environment. |
 | `load/` | Script k6 e risultati dei run. |
-| `frontend/` | Static Web App per la demo visiva. |
+| `frontend/` | Static Web App per la demo visiva: manda la stessa richiesta ai tre worker e mostra i risultati affiancati. |
 | `.github/workflows/` | Pipeline di build e deploy (manuale, `workflow_dispatch`). |
 
 ## Documenti

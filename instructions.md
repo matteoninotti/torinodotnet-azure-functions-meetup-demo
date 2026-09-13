@@ -337,6 +337,7 @@ Momento di presentazione: *"questa è la forma di produzione, questa è la forma
 6. **Cold start misurato separatamente**, con mediana e p95 (mai la media).
 7. **Perché il carico è a tasso costante e non a utenti virtuali**: con un modello VU-based il backend più lento riceve meno richieste.
 8. **Il cold start sotto burst è lo scenario reale**, non quello isolato.
+9. **La demo dal vivo non è una misura, e la sua latenza non è quella delle slide.** La Static Web App **non può stare in Italy North** con i worker: `Microsoft.Web/staticSites` esiste solo in Central US, East US 2, West US 2, West Europe e East Asia, e West Europe — la più vicina — è rifiutata da questa sottoscrizione (*"The selected region is currently not accepting new customers"*). Sta in **East US 2**. Due limiti diversi e facili da confondere: un tipo di risorsa che in una regione *non esiste*, e una regione che esiste ma *non accetta nuovi clienti* — il secondo non compare in nessuna tabella di disponibilità, si scopre al deploy. Il percorso misurato va da k6 alla function e da lì ad Application Insights: il frontend non ci compare mai (D93, D96).
 
 ### Sul billing
 9. **Su Flex si paga solo taglia dell'istanza × durata wall-clock.** CPU e memoria realmente consumata non entrano nel calcolo.

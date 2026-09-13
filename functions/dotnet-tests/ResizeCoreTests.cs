@@ -196,4 +196,32 @@ public sealed class ResizeCoreTests
         RequireImage();
         Assert.All(ResizeCore.ImageCatalog(), entry => Assert.True(entry.Bytes > 0));
     }
+
+    /// <summary>
+    /// I byte serviti alla demo devono essere gli stessi che il catalogo conta.
+    /// Se divergessero, la pagina mostrerebbe come "originale" qualcosa di
+    /// diverso da cio' che la pipeline ha davvero ricevuto in ingresso, e il
+    /// confronto prima/dopo direbbe una cosa falsa.
+    /// </summary>
+    [Fact]
+    public void SourceBytesMatchesTheCatalogSize()
+    {
+        RequireImage();
+        foreach (ImageCatalogEntry entry in ResizeCore.ImageCatalog())
+        {
+            byte[]? payload = ResizeCore.SourceBytes(entry.Name);
+            Assert.NotNull(payload);
+            Assert.Equal(entry.Bytes, payload!.Length);
+            // Un JPEG comincia sempre con il marker SOI: conferma che stiamo
+            // servendo il file grezzo e non una ricodifica.
+            Assert.Equal(0xFF, payload[0]);
+            Assert.Equal(0xD8, payload[1]);
+        }
+    }
+
+    [Fact]
+    public void SourceBytesUnknownImageIsNull()
+    {
+        Assert.Null(ResizeCore.SourceBytes("non-esiste.jpg"));
+    }
 }

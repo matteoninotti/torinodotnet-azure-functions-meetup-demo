@@ -3,6 +3,7 @@
 // Contratto (identico nei tre linguaggi):
 //
 //	POST /api/resize?image=<nome>&count=<N>&width=<px>&quality=<1-95>[&hash=1][&return=image]
+//	GET  /api/source?image=<nome>
 //
 // La risposta di default e' JSON. `return=image` restituisce il JPEG per la
 // demo visiva e non va mai usato durante i run di misura: aggiungerebbe alla
@@ -13,6 +14,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"math"
 	"net/http"
@@ -158,6 +160,29 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// sourceHandler restituisce i byte originali di un'immagine del pool: la meta'
+// "prima" della demo.
+//
+// Query string e non un segmento di path (/api/images/{nome}) per due motivi:
+// e' la stessa forma ?image= del resto del contratto, e non dipende da come
+// ciascuno dei tre host risolve i template di route — che qui, in public
+// preview, non sarebbe verificabile prima del deploy.
+//
+// NON e' nel percorso misurato: restituisce byte gia' in memoria senza toccare
+// il decoder (D3, D95).
+func sourceHandler(w http.ResponseWriter, r *http.Request) {
+	name := r.URL.Query().Get("image")
+	payload, ok := sourceBytes(name)
+	if !ok {
+		writeError(w, http.StatusNotFound,
+			fmt.Sprintf("immagine '%s' non trovata. Disponibili: %s", name, availableList()))
+		return
+	}
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(payload)
+}
+
 // imagesHandler e' l'elenco delle immagini selezionabili: contratto per il
 // selettore della SWA.
 //
@@ -196,6 +221,11 @@ func main() {
 		sdk.WithMethods("GET"),
 		sdk.WithAuth("anonymous"),
 		sdk.WithRoute("images"),
+	)
+	app.HTTP("source", sourceHandler,
+		sdk.WithMethods("GET"),
+		sdk.WithAuth("anonymous"),
+		sdk.WithRoute("source"),
 	)
 
 	worker.Start(app)

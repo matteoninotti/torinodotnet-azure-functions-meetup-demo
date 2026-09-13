@@ -83,12 +83,12 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 
 ## Fase 6 — Frontend
 
-- [ ] **[M] Static Web App** in HTML + JS senza framework (D88), che mostra prima/dopo il resize usando `return=image`.
+- [x] **[M] Static Web App** in HTML + JS senza framework (D88), pubblicata e funzionante. ⚠️ Mostra il **dopo** e il peso prima→dopo, non l'immagine sorgente: per quella servirebbe un endpoint nuovo sui tre worker, ed è una decisione aperta (D95).
 - [x] **[M] Decidere se punta a tutti e tre i backend** (selettore di linguaggio) o a uno solo. ✅ Tutti e tre, con selettore di linguaggio (D88): il contratto è già identico sui tre worker, quindi il frontend cambia solo l'host della `fetch`.
-- [ ] **[M] Selettore di linguaggio** che manda la stessa richiesta ai tre backend (D88).
-- [ ] **[M] Selettore immagini** popolato dinamicamente da `GET /api/images` (D34) — mai hardcodare i nomi dei file, così cambiare il pool via redeploy aggiorna anche il frontend senza toccarlo.
-- [ ] **[S] Configurare il CORS** con l'origine della Static Web App su **tutte e tre** le Function App (D12, D88). Spostato da Fase 2: non serve finché la SWA non esiste. ⚠️ È una modifica al Bicep, e per D72 un deploy dell'infrastruttura scrive su tutte le app: va fatto **prima** che cominci la campagna di misura, mai nel mezzo.
-- [ ] **[M] CORS** verificato dal browser, non solo dalla configurazione.
+- [x] **[M] Selettore di linguaggio** che manda la stessa richiesta ai tre backend (D88). ✅ Esegue sui tre insieme e mostra i risultati affiancati, che dal vivo è più efficace di un selettore a scelta singola.
+- [x] **[M] Selettore immagini** popolato dinamicamente da `GET /api/images` (D34) — mai hardcodare i nomi dei file, così cambiare il pool via redeploy aggiorna anche il frontend senza toccarlo. ✅ Interroga tutti e tre i backend e offre solo i nomi presenti su tutti: un elenco divergente è un pacchetto di deploy incompleto e si vede subito.
+- [x] **[S] Configurare il CORS** con l'origine della Static Web App su **tutte e tre** le Function App (D12, D88). ✅ Dichiarato nel Bicep con l'origine letta dalla risorsa SWA stessa, e deployato prima dell'inizio della campagna di misura come D72 richiede.
+- [x] **[M] CORS** verificato dal browser, non solo dalla configurazione. ✅ La pagina carica il catalogo dalle tre origini ed esegue il resize sui tre. ⚠️ `az resource show` dà `cors: null` anche quando funziona: serve `az functionapp cors show` (D93).
 
 ## Fase 7 — Run finali e analisi
 
@@ -98,6 +98,7 @@ Priorità: **[M]** must — senza, il talk non sta in piedi · **[S]** should �
 - [ ] **[M] Metrica 1** — throughput a regime, tasso costante identico per i tre. ⚠️ Serve una finestra di pre-riscaldamento da scartare prima di quella misurata, altrimenti si misura la rampa di scale-out e non il regime (D90).
 - [ ] **[M] Metrica 2** — cold start isolato: 10 ripetizioni per linguaggio, mediana e p95 (**mai la media**). Serve un piccolo **script di orchestrazione** che ripeta il ciclo `attendi zero → una richiesta cronometrata → leggi la durata server-side`: i pezzi esistono già (`load/scripts/wait-for-zero.sh`, le query in `load/queries/`), manca il ciclo che li mette insieme identico per i tre linguaggi. ⚠️ Costo di agenda: ~5 minuti di attesa per ripetizione, quindi ~2,5 ore per i tre linguaggi (D56).
 - [ ] **[M] Metrica 3** — cold start sotto burst, 3 ripetizioni per linguaggio, percentili secondo per secondo, curve sovrapposte.
+- [ ] **[S] Controllo incrociato della contabilità dei GB-s su Cost Management.** Ogni cifra in euro del talk è un **calcolo** — quantità misurata × prezzo pubblicato — non un estratto conto: restando dentro il free grant la fattura dirà sempre €0, quindi non c'è una fattura contro cui validarla. Cost Management però espone la **quantità** consumata per meter anche quando il costo è zero: se coincide con la nostra somma di `OnDemandFunctionExecutionUnits`, abbiamo una conferma indipendente della contabilità. ⚠️ Da **provare**, non è dato per buono: se la quantità non fosse esposta a costo zero, il controllo non esiste e va detto così nelle limitazioni.
 - [ ] **[M] Metrica 4** — il cold start è fatturato? Su Python, `count` tarato sopra 1s, confronto tra `OnDemandFunctionExecutionUnits` e `2048 × durata`. 3 ripetizioni. ⚠️ **Non leggere "quel minuto"**: la metrica ritarda 1-2 minuti e si spalma su più minuti, va sommata su una finestra (D60).
 - [ ] **[S] Controllo differenziale della Metrica 4** (D61): due deploy della sola app Python identici tranne un import pesante a livello di modulo (pochi secondi, sotto il timeout di app init di 30 s), una richiesta singola a freddo su ciascuno, confronto dei MB-ms. Cancella le costanti ignote — allocazione istanza, avvio host, arrotondamento — perché identiche nei due deploy, e testa **direttamente** il corollario da slide (dove metti l'init cambia se lo paghi) invece di dedurlo. La misura assoluta resta `[M]`: questa è ciò che la rende conclusiva.
 - [ ] **[M] Run "sotto il secondo"** per mostrare il minimo fatturabile che azzera il vantaggio di Go.

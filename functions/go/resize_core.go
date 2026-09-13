@@ -145,6 +145,18 @@ func availableImages() []string {
 	return names
 }
 
+// sourceBytes restituisce i byte grezzi dell'immagine sorgente, senza
+// decodificarla.
+//
+// Serve solo alla demo visiva: il frontend mostra l'originale accanto al
+// risultato, e l'originale non lo serviva nessun endpoint (D95). Sono byte
+// gia' in memoria dall'app init — nessun accesso al disco, nessun decoder,
+// quindi niente che possa interferire col percorso misurato.
+func sourceBytes(name string) ([]byte, bool) {
+	payload, ok := images[name]
+	return payload, ok
+}
+
 type catalogEntry struct {
 	Name  string `json:"name"`
 	Bytes int    `json:"bytes"`

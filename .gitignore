@@ -22,6 +22,9 @@ venv/
 
 # Go
 /functions/go/bin/
+# `go build ./...` senza -o lascia il binario col nome del package nella
+# cartella corrente: 19 MB che in un repo pubblico non se ne vanno piu'.
+/functions/go/resizeworker
 # pacchetto prodotto da `func pack`, rigenerabile
 /functions/go/*.zip
 

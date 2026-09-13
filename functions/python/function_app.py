@@ -3,6 +3,7 @@
 Contratto (identico nei tre linguaggi):
 
     POST /api/resize?image=<nome>&count=<N>&width=<px>&quality=<1-95>[&hash=1][&return=image]
+    GET  /api/source?image=<nome>
 
 La risposta di default e' JSON. `return=image` restituisce il JPEG per la demo
 visiva e non va mai usato durante i run di misura: aggiungerebbe alla latenza
@@ -87,6 +88,26 @@ def health(req: func.HttpRequest) -> func.HttpResponse:
         "images": resize_core.available_images(),
     }
     return func.HttpResponse(json.dumps(body), status_code=200, mimetype="application/json")
+
+
+@app.route(route="source", methods=["GET"])
+def source(req: func.HttpRequest) -> func.HttpResponse:
+    """Byte originali di un'immagine del pool: la meta' "prima" della demo.
+
+    Query string e non un segmento di path (`/api/images/{nome}`) per due
+    motivi: e' la stessa forma `?image=` del resto del contratto, e non
+    dipende da come ciascuno dei tre host risolve i template di route — che
+    sul worker Go, in public preview, non e' verificabile prima del deploy.
+
+    NON e' nel percorso misurato: restituisce byte gia' in memoria senza
+    toccare il decoder (D3, D95).
+    """
+    name = req.params.get("image", "")
+    payload = resize_core.source_bytes(name)
+    if payload is None:
+        available = ", ".join(resize_core.available_images()) or "nessuna"
+        return _error(404, f"immagine '{name}' non trovata. Disponibili: {available}")
+    return func.HttpResponse(payload, status_code=200, mimetype="image/jpeg")
 
 
 @app.route(route="images", methods=["GET"])
