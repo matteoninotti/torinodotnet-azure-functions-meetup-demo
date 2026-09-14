@@ -22,10 +22,11 @@ La colonna `phase` separa la **prima richiesta servita da ciascuna istanza** (`1
 
 L'overhead host↔worker vale ~180–200 ms sulla prima richiesta di un'istanza e ~7 ms sulle successive. Un valore unico dipende quindi da **quante istanze sono nate durante il run**, cioè dalla forma del carico, non dal linguaggio — e su un run in scale-out dà un numero venticinque volte più grande di quello a regime.
 
-Due conseguenze pratiche:
+Tre conseguenze pratiche:
 
 - `p50_overhead_ms` è la **mediana delle differenze riga per riga**, non la differenza di due mediane. La seconda non corrisponde a nessuna richiesta realmente servita.
 - Le due righe si sommano solo sui **conteggi** (`requests`, `ok`, `failed`). **Mai sui percentili.**
+- «Prima richiesta servita da quell'istanza» significa **a partire da `win_start - look_back`**, non da `win_start`. Il `look_back` (30 minuti) esiste perché un run è quasi sempre preceduto da poco da un altro sulla stessa app — D90 punto 1 impone un riscaldamento identico subito prima della Metrica 1 — e senza di esso un'istanza già calda verrebbe contata come cold start: sul ladder Go del 13 settembre erano 4 istanze su 190. Il valore va tenuto **sopra il tempo di scale-to-zero** (~3–4 minuti, D56), altrimenti la garanzia decade in silenzio.
 
 La colonna `instances` dice quante istanze compaiono in ciascuna fase: senza quel contesto i percentili dell'altra riga non si interpretano.
 
