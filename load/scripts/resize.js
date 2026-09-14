@@ -88,11 +88,13 @@ export const options = {
       // il default e' 30s ([Graceful
       // stop](https://grafana.com/docs/k6/latest/using-k6/scenarios/concepts/graceful-stop/)).
       // Trenta secondi non bastano: durante lo scale-out la coda lato client
-      // arriva a 36s (p95 di http_req_duration sul run Go, D91), quindi le
-      // ultime iterazioni verrebbero tagliate da k6 e il server registrerebbe
-      // dei 499 — che non sono un fallimento del backend ne' del generatore, e
-      // che sarebbero letti come il primo dei due. E' l'origine dei 7 `499` di
-      // D89. 120s copre il p95 osservato con margine.
+      // arriva a 36s (p95 di http_req_duration sul run Go, D91), e D90 punto 1
+      // misura ~16s di arretrato che si smaltisce DOPO la fine della finestra.
+      // Con il default le ultime iterazioni verrebbero interrotte, e k6 le
+      // conta a parte nel riepilogo (`N complete and M interrupted`).
+      //
+      // ⚠️ Questo NON e' il parametro che ha prodotto i 7 `499` di D89: quelli
+      // sono il `timeout` per richiesta qui sotto. Vedi il commento la'.
       //
       // Identico per i tre linguaggi: un generatore configurato diversamente
       // per ciascun backend sarebbe un'asimmetria in piu' da dichiarare.
@@ -124,6 +126,25 @@ export default function () {
     // Il tag rende i percentili leggibili per linguaggio quando si confrontano
     // piu' run nello stesso output.
     tags: { language: LANGUAGE },
+
+    // Scritto esplicito al valore che k6 usa comunque
+    // ([default `60s`](https://grafana.com/docs/k6/latest/javascript-api/k6-http/params/)),
+    // perche' e' il parametro che ha prodotto i 7 `499` di D89 e non lo si
+    // vedeva da nessuna parte. Con concorrenza server-side a 1 la maggior parte
+    // di questi 60s e' CODA davanti al front end, non calcolo: D90 punto 1
+    // misura una mediana client di 9,45s contro 5,28s server-side, e D91 un p95
+    // di http_req_duration a 36s. Basta che coda + lavoro superino il tetto e k6
+    // molla la richiesta: lato client diventa `status 0` / `error_code 1050`
+    // dentro http_req_failed, lato server un `499`.
+    //
+    // Resta 60s e non di piu' ANCHE SE alzarlo farebbe sparire quei 499: il
+    // tetto limita la durata massima di un'iterazione, e con
+    // constant-arrival-rate i VU necessari sono RPS x durata. A 60s il caso
+    // peggiore e' 10 x 60 = 600 VU; a 240s diventa 2.400, contro MAX_VUS = 400.
+    // Si scambierebbe un 499 — classificabile e che non invalida niente — con
+    // dei dropped_iterations, che invalidano il run (load/README.md). La leva
+    // giusta se ricompaiono e' PRE_ALLOCATED_VUS, come in D91.
+    timeout: '60s',
   });
 
   statusCodes.add(1, { status: String(res.status) });
@@ -154,11 +175,13 @@ export function teardown(data) {
   console.log(`RUN_END ${new Date().toISOString()} (started ${data.startedAt})`);
 }
 
-// Nota di lettura dei risultati, per non confondere tre fallimenti diversi:
+// Nota di lettura dei risultati, per non confondere QUATTRO fallimenti diversi:
 //
 //   http_req_failed        -> il backend ha risposto male (o non ha risposto)
 //   dropped_iterations     -> k6 non e' riuscito a PARTIRE al tasso richiesto,
 //                             perche' i VU allocati non bastavano
+//   timeout della richiesta-> k6 ha ABBANDONATO una richiesta al proprio tetto
+//                             di 60s; lato server e' un 499
 //   interrupted iterations -> k6 ha TAGLIATO un'iterazione gia' partita allo
 //                             scadere di gracefulStop; lato server e' un 499
 //
@@ -166,7 +189,15 @@ export function teardown(data) {
 // passo, e invalida il run come misura di carico offerto. Se compare, si
 // rialza PRE_ALLOCATED_VUS e si rifa'.
 //
-// Il terzo non e' ne' l'uno ne' l'altro: la richiesta era partita e il backend
-// la stava servendo: e' k6 che ha chiuso la connessione. In
-// `resize_status_codes` compare come 499 e sembra un fallimento del backend.
-// gracefulStop a 120s esiste per non averne nessuno; se ne compaiono, si alza.
+// Il terzo e il quarto lato server sono INDISTINGUIBILI — entrambi 499 — e
+// lato client no, ed e' cosi' che si separano:
+//
+//   499 + `status 0` / `error_code 1050` fra i resize_status_codes, iterazione
+//        COMPLETA nel riepilogo        -> timeout della richiesta
+//   499 + `N complete and M interrupted iterations` con M > 0
+//                                      -> gracefulStop
+//
+// I 7 `499` di D89 sono il terzo caso, non il quarto: erano il generatore
+// sottodimensionato (13 dropped_iterations nello stesso run) e sono spariti in
+// D91 con 300 VU, senza toccare gracefulStop. Se ne ricompaiono, la leva e'
+// PRE_ALLOCATED_VUS.

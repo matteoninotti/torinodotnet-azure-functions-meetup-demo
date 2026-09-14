@@ -38,13 +38,23 @@ Tutti i parametri stanno in variabili d'ambiente (D15): `LANGUAGE`, `HOST`, `IMA
 
 ## Leggere i risultati senza sbagliare
 
-Tre contatori di fallimento che sembrano lo stesso e non lo sono:
+Quattro contatori di fallimento che sembrano lo stesso e non lo sono:
 
 - **`http_req_failed`** — il backend ha risposto male o non ha risposto. È un dato sull'esperimento.
 - **`dropped_iterations`** — k6 non è riuscito a *far partire* le richieste al tasso richiesto, perché i VU allocati non bastavano. È un fallimento del generatore: invalida il run come misura di carico offerto. Se compare, si rialza `PRE_ALLOCATED_VUS` e si rifà.
-- **Iterazione interrotta da k6** — la richiesta era partita e il backend la stava servendo, ma allo scadere di `gracefulStop` k6 ha chiuso la connessione. Lato server diventa un **`499`**, e in `resize_status_codes` è indistinguibile da un errore del backend: **non lo è**, e non è nemmeno un fallimento del generatore. k6 le conta a parte nel riepilogo (`... complete and N interrupted iterations`).
+- **Richiesta abbandonata da k6 al proprio `timeout`** — la richiesta era partita, ma la risposta non è arrivata entro il tetto per richiesta (`60s`, [default di k6](https://grafana.com/docs/k6/latest/javascript-api/k6-http/params/), ora scritto esplicito nello scenario). Lato server diventa un **`499`**.
+- **Iterazione interrotta da k6** — la richiesta era partita e il backend la stava servendo, ma allo scadere di `gracefulStop` k6 ha chiuso la connessione. Lato server diventa un **`499`** anche questa.
 
-Il terzo è il motivo per cui `gracefulStop` è **esplicito a `120s`** nello scenario invece del [default di `30s`](https://grafana.com/docs/k6/latest/using-k6/scenarios/concepts/graceful-stop/): durante lo scale-out la coda lato client arriva a 36 s (p95 di `http_req_duration` sul run Go, D91), quindi con il default le ultime iterazioni della finestra verrebbero tagliate. I 7 `499` di D89 sono questo. Se ne compaiono ancora, si alza `gracefulStop`, non `PRE_ALLOCATED_VUS`.
+**Il terzo e il quarto lato server sono lo stesso codice e lato client no.** È così che si separano:
+
+| in `resize_status_codes` e nel riepilogo | cos'è |
+|---|---|
+| `499` lato server + **`status 0`**, `error_code 1050`, iterazione **completa** | la richiesta ha sfondato il `timeout` di 60 s |
+| `499` lato server + `N complete and **M** interrupted iterations`, con M > 0 | `gracefulStop` |
+
+I **7 `499` di D89 sono il terzo caso**: erano il generatore sottodimensionato — nello stesso run c'erano 13 `dropped_iterations` — e sono spariti in D91 rifacendo il run con 300 VU, **senza toccare `gracefulStop`**. Se ne ricompaiono, la leva è `PRE_ALLOCATED_VUS`.
+
+`gracefulStop` resta comunque **esplicito a `120s`** invece del [default di `30s`](https://grafana.com/docs/k6/latest/using-k6/scenarios/concepts/graceful-stop/), per il suo motivo: D90 punto 1 misura ~16 s di arretrato che si smaltisce dopo la fine della finestra, e con 30 s quelle iterazioni finirebbero tagliate.
 
 Lo script conta anche gli status code uno per uno (`resize_status_codes`), perché sotto burst un `429` (la piattaforma limita lo scale-out) e un `500` dopo 30 secondi (app init che sfora il timeout) sono due storie diverse (D45).
 
