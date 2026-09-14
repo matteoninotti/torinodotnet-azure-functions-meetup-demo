@@ -5,20 +5,26 @@ si verifica che i tre linguaggi siano davvero d'accordo sulla geometria
 dell'output, invece di assumerlo.
 """
 
+import io
 import json
 import os
 
 import pytest
+from PIL import Image, JpegImagePlugin
 
 import resize_core
 
-CONFORMANCE = os.path.join(
+CONFORMANCE_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
-    "..", "..", "..", "shared", "conformance", "height_cases.json",
+    "..", "..", "..", "shared", "conformance",
 )
 
-with open(CONFORMANCE, encoding="utf-8") as handle:
+with open(os.path.join(CONFORMANCE_DIR, "height_cases.json"), encoding="utf-8") as handle:
     HEIGHT_CASES = json.load(handle)["cases"]
+
+with open(os.path.join(CONFORMANCE_DIR, "param_cases.json"), encoding="utf-8") as handle:
+    PARAM_SPEC = json.load(handle)
+PARAM_CASES = PARAM_SPEC["cases"]
 
 
 def test_conformance_file_is_not_empty():
@@ -42,6 +48,42 @@ def test_target_height_matches_conformance(case):
 def test_target_height_rejects_degenerate_source(src_w, src_h):
     with pytest.raises(resize_core.InvalidParameter):
         resize_core.target_height(src_w, src_h, 800)
+
+
+# --- Parsing dei parametri: casi condivisi ----------------------------------
+
+
+def test_param_conformance_file_is_not_empty():
+    """Stesso guardrail di height_cases: se i casi si svuotassero, il test
+    parametrizzato sotto sparirebbe senza fallire."""
+    assert len(PARAM_CASES) == 16
+
+
+def test_param_conformance_limits_match_the_worker():
+    """I limiti scritti nel file devono essere quelli davvero applicati.
+
+    Se qualcuno alzasse MAX_COUNT nel codice e non nel file, i casi continuerebbero
+    a passare pur non descrivendo piu' il contratto vero — e i tre linguaggi
+    potrebbero divergere senza che nessun test lo dica.
+    """
+    assert PARAM_SPEC["min"] == resize_core.MIN_COUNT
+    assert PARAM_SPEC["max"] == resize_core.MAX_COUNT
+    assert PARAM_SPEC["default"] == 1
+
+
+@pytest.mark.parametrize("case", PARAM_CASES, ids=lambda c: repr(c["raw"]))
+def test_parse_int_matches_conformance(case):
+    raw, expected = case["raw"], case["expected"]
+    call = lambda: resize_core._parse_int(
+        raw, PARAM_SPEC["parameter"], PARAM_SPEC["default"], PARAM_SPEC["min"], PARAM_SPEC["max"]
+    )
+    if expected == "invalid":
+        with pytest.raises(resize_core.InvalidParameter):
+            call()
+    elif expected == "default":
+        assert call() == PARAM_SPEC["default"], case["why"]
+    else:
+        assert call() == expected, case["why"]
 
 
 # --- Parsing dei parametri --------------------------------------------------
@@ -118,6 +160,115 @@ def test_pipeline_count_does_not_change_the_output():
 def test_pipeline_hash_is_off_by_default():
     params = resize_core.parse_params(_params(image=resize_core.available_images()[0]))
     assert resize_core.run_pipeline(params).sha256 is None
+
+
+def _require_named_image(name):
+    """Byte di un'immagine PRECISA, per i test che hanno bisogno di dimensioni note."""
+    payload = resize_core.source_bytes(name)
+    if payload is None:
+        pytest.skip(f"{name} non e' in functions/python/images/: lanciare ./scripts/sync-images.sh python")
+    return payload
+
+
+def test_pipeline_height_follows_the_shared_formula():
+    """La formula condivisa dev'essere quella davvero usata dalla pipeline.
+
+    Non basta testarla in isolamento: un resize che ignorasse target_height
+    passerebbe comunque i casi di conformita'. E non basta `height > 0`, che
+    e' vero per qualunque resize — era l'asserzione dei gemelli .NET e Go, e
+    il commento prometteva un controllo che l'asserzione non faceva.
+    """
+    name = "npm-install-7-years.jpg"
+    source = _require_named_image(name)
+
+    # Le dimensioni si leggono dal file con il decoder QUI nel test, non dal
+    # codice sotto test: altrimenti si confronterebbe la pipeline con se stessa.
+    with Image.open(io.BytesIO(source)) as original:
+        src_w, src_h = original.size
+    assert (src_w, src_h) == (1322, 1140), f"{name} non ha le dimensioni attese"
+
+    expected_height = resize_core.target_height(src_w, src_h, 640)
+    assert expected_height == 552
+
+    result = resize_core.run_pipeline(resize_core.parse_params(_params(image=name, width="640")))
+    assert (result.width, result.height) == (640, expected_height)
+    assert result.output_bytes > 0
+
+    # E il JPEG prodotto deve avere davvero quelle dimensioni. `height` nel
+    # risultato e' il valore che la pipeline ha CALCOLATO: confrontarlo con la
+    # formula sarebbe una tautologia. I pixel veri no.
+    with Image.open(io.BytesIO(result.payload)) as produced:
+        assert produced.size == (640, expected_height)
+
+
+# --- Parametri dell'encoder (D8) --------------------------------------------
+
+
+def _read_jpeg_encoding(data):
+    """Marker SOF e fattori di campionamento della luma, letti dai byte.
+
+    Si leggono dall'output e non dalla configurazione dell'encoder: la
+    configurazione dice cosa abbiamo chiesto, i byte dicono cosa e' uscito. Per
+    Pillow la differenza non e' teorica — la documentazione dichiara che senza
+    `subsampling` esplicito "the setting will be determined by libjpeg or
+    libjpeg-turbo", cioe' dipende dalla build installata.
+
+    Struttura di un segmento SOF: lunghezza (2 byte), precisione (1), altezza
+    (2), larghezza (2), numero di componenti (1), poi per ogni componente id
+    (1), fattori di campionamento impacchettati in un byte (1) e tabella di
+    quantizzazione (1). Per la Y, 0x22 significa h=2 v=2, cioe' 4:2:0.
+    """
+    assert data[:2] == b"\xff\xd8", "il payload non comincia con il marker SOI"
+    i = 2
+    while i + 3 < len(data):
+        assert data[i] == 0xFF, f"segmento malformato all'offset {i}"
+        marker = data[i + 1]
+        length = (data[i + 2] << 8) | data[i + 3]
+        # SOF0 = baseline, SOF1 = extended sequential, SOF2 = progressive.
+        # Gli altri FF Cx sono DHT (C4), RSTn, DAC (CC): non sono SOF.
+        if marker in (0xC0, 0xC1, 0xC2):
+            return marker, data[i + 2 + 2 + 1 + 4 + 1 + 1]
+        i += 2 + length
+    raise AssertionError("nessun marker SOF trovato nel JPEG prodotto")
+
+
+@requires_images
+def test_pipeline_output_is_baseline_420():
+    """I tre worker devono produrre lo STESSO formato di JPEG.
+
+    Il minimo comune denominatore lo impone la stdlib Go, che sa fare solo
+    "4:2:0 baseline" (D8). Fino a ora era verificato a mano; il README pero'
+    promette che la simmetria e' verificata invece che sperata.
+    """
+    result = resize_core.run_pipeline(
+        resize_core.parse_params(_params(image=resize_core.available_images()[0]))
+    )
+    sof, luma_sampling = _read_jpeg_encoding(result.payload)
+    assert sof == 0xC0, f"atteso SOF0 (baseline), ottenuto 0x{sof:02X}"
+    assert luma_sampling == 0x22, f"atteso 4:2:0 (0x22), ottenuto 0x{luma_sampling:02X}"
+
+    # Seconda lettura con l'API di Pillow, che dice la stessa cosa in una forma
+    # piu' leggibile: (2, 2, 1, 1, 1, 1) e' 4:2:0.
+    with Image.open(io.BytesIO(result.payload)) as produced:
+        assert JpegImagePlugin.get_sampling(produced) == 2  # 2 = 4:2:0
+        assert not produced.info.get("progressive")
+
+
+@requires_images
+def test_pipeline_output_honours_the_quality_parameter():
+    """Qualita' piu' bassa deve produrre meno byte.
+
+    La qualita' non si legge dai marker senza reimplementare le tabelle di
+    quantizzazione, ma un effetto osservabile ce l'ha.
+    """
+    image = resize_core.available_images()[0]
+    small = resize_core.run_pipeline(
+        resize_core.parse_params(_params(image=image, quality="20"))
+    ).output_bytes
+    large = resize_core.run_pipeline(
+        resize_core.parse_params(_params(image=image, quality="95"))
+    ).output_bytes
+    assert small < large, f"qualita' 20 ha prodotto {small} byte, qualita' 95 ne ha prodotti {large}"
 
 
 # --- Catalogo per il selettore del frontend ---------------------------------

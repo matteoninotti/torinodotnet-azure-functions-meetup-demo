@@ -6,10 +6,12 @@ Con un modello a utenti virtuali (Locust, JMeter) il backend più lento ricevere
 
 ## Come si usa
 
-- **Iterazione e messa a punto** → k6 in locale dal Mac. Zero costo, ma la latenza di rete domestica entra nella misura client-side.
-- **Numeri che finiscono nelle slide** → k6 in un **Azure Container Apps Job** in Italy North.
+- **Iterazione e messa a punto** → k6 in locale dal Mac. Zero costo, ma la latenza di rete domestica entra nella misura client-side (~34 ms di RTT verso Italy North, misurati in D53). Questo è deciso.
+- **Numeri che finiscono nelle slide** → **ancora da decidere in Fase 7 (D59)**: Mac o **Azure Container Apps Job** in Italy North.
 
-Sul job ACA, due impostazioni non sono opzionali:
+⚠️ Questa riga diceva "numeri finali → ACA Job" come se fosse deciso. Non lo è: l'ACA Job era stato promosso sulla base di ~765 ms che sembravano latenza di rete e invece erano cold start (D53 corregge D48), e caduta la premessa la decisione è tornata aperta. Va presa **a parametri congelati**, misurando se il Mac regge il tasso finale senza diventare lui il collo di bottiglia — e la misura non è `dropped_iterations`, che il cold start del backend confonde: servono VU fissi e abbondanti, CPU locale osservata, e tasso ottenuto contro tasso richiesto (D59).
+
+Se il job ACA servirà, due impostazioni non sono opzionali:
 
 - **`replicaRetryLimit` a 0.** I job presuppongono i retry: se un load test fallisce a metà e riparte, si genera carico due volte e i numeri sono spazzatura.
 - **`replicaTimeout`** dimensionato sulla durata realistica del test più margine — allo scadere il job viene terminato.
@@ -36,10 +38,13 @@ Tutti i parametri stanno in variabili d'ambiente (D15): `LANGUAGE`, `HOST`, `IMA
 
 ## Leggere i risultati senza sbagliare
 
-Due contatori di fallimento che sembrano lo stesso e non lo sono:
+Tre contatori di fallimento che sembrano lo stesso e non lo sono:
 
 - **`http_req_failed`** — il backend ha risposto male o non ha risposto. È un dato sull'esperimento.
 - **`dropped_iterations`** — k6 non è riuscito a *far partire* le richieste al tasso richiesto, perché i VU allocati non bastavano. È un fallimento del generatore: invalida il run come misura di carico offerto. Se compare, si rialza `PRE_ALLOCATED_VUS` e si rifà.
+- **Iterazione interrotta da k6** — la richiesta era partita e il backend la stava servendo, ma allo scadere di `gracefulStop` k6 ha chiuso la connessione. Lato server diventa un **`499`**, e in `resize_status_codes` è indistinguibile da un errore del backend: **non lo è**, e non è nemmeno un fallimento del generatore. k6 le conta a parte nel riepilogo (`... complete and N interrupted iterations`).
+
+Il terzo è il motivo per cui `gracefulStop` è **esplicito a `120s`** nello scenario invece del [default di `30s`](https://grafana.com/docs/k6/latest/using-k6/scenarios/concepts/graceful-stop/): durante lo scale-out la coda lato client arriva a 36 s (p95 di `http_req_duration` sul run Go, D91), quindi con il default le ultime iterazioni della finestra verrebbero tagliate. I 7 `499` di D89 sono questo. Se ne compaiono ancora, si alza `gracefulStop`, non `PRE_ALLOCATED_VUS`.
 
 Lo script conta anche gli status code uno per uno (`resize_status_codes`), perché sotto burst un `429` (la piattaforma limita lo scale-out) e un `500` dopo 30 secondi (app init che sfora il timeout) sono due storie diverse (D45).
 

@@ -16,7 +16,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"math"
 	"net/http"
 	"runtime"
 
@@ -29,7 +28,11 @@ const language = "go"
 // Prefisso su cui si aggancia la query di Log Analytics. Un'unica riga di log
 // con un payload JSON stabile, invece delle customDimensions: funziona allo
 // stesso modo nei tre worker e non dipende da come ciascuno inoltra i campi
-// strutturati. Il payload comincia a substring(Message, 15).
+// strutturati. Il JSON viene estratto dalla query con una regex e non a offset
+// fisso (D87): questo worker APPENDE gli attributi dell'invocazione in coda al
+// messaggio (`... } trigger_type=httpTrigger`), quindi un offset dall'inizio
+// sarebbe falso per costruzione — non c'e' nessuna posizione fissa in cui il
+// payload finisce.
 const metricsPrefix = "RESIZE_METRICS"
 
 // runtimeVersion e' la versione del compilatore con cui questo binario e'
@@ -110,7 +113,18 @@ func resizeHandler(w http.ResponseWriter, r *http.Request) {
 		Height:      result.Height,
 		Quality:     p.Quality,
 		OutputBytes: result.OutputBytes,
-		TotalMs:     math.Round(result.TotalMs*1000) / 1000,
+		// NON arrotondato, in nessuno dei tre worker. math.Round di Go arrotonda
+		// 0.5 per eccesso in valore assoluto, round() di Python e Math.Round di
+		// C# lo mandano al pari: sullo stesso valore i tre emettevano cifre
+		// diverse (1,0025 -> 1,003 qui, 1,002 negli altri due). E' la stessa
+		// classe di asimmetria che D7 evita per l'altezza, e si toglie allo
+		// stesso modo — non scegliendo un arrotondamento, ma non arrotondando.
+		// L'entita' era 1 us, quindi irrilevante per i numeri; il punto e' che
+		// una regola di arrotondamento diversa per linguaggio dentro il campo
+		// che POI si confronta e' esattamente cio' che l'esperimento non puo'
+		// permettersi. Ad arrotondare ci pensa chi legge: il frontend per la
+		// vista, le query per i percentili.
+		TotalMs: result.TotalMs,
 	}
 
 	payload, err := json.Marshal(measure)

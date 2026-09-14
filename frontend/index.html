@@ -31,7 +31,10 @@
 
     <div class="field">
       <label for="width">Larghezza</label>
-      <input type="number" id="width" value="800" min="1" max="10000">
+      <!-- 4000 e' il tetto dei tre worker: oltre, l'endpoint risponde 400.
+           Offrire qui una scelta che il backend rifiuta farebbe sembrare rotta
+           la demo. -->
+      <input type="number" id="width" value="800" min="1" max="4000">
     </div>
 
     <div class="field">
@@ -43,7 +46,8 @@
 
     <div class="field">
       <label for="count">Ripetizioni</label>
-      <input type="number" id="count" value="1" min="1" max="10000">
+      <!-- 200 e' il tetto dei tre worker: oltre, l'endpoint risponde 400. -->
+      <input type="number" id="count" value="1" min="1" max="200">
       <small>Quante volte la pipeline gira dentro la stessa richiesta.</small>
     </div>
 

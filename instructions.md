@@ -224,10 +224,14 @@ Dalla [tabella Billing](https://learn.microsoft.com/en-us/azure/azure-functions/
 
 **Premessa che orienta tutte le scelte**: la metrica che conta per i costi è la **durata server-side** della function. Il client serve a *produrre* carico e a dare percentili di esperienza utente, non a stabilire il costo.
 
-### Generatore di carico — DECISO: k6 in Azure Container Apps Job
+### Generatore di carico — k6. **Dove gira: ancora da decidere in Fase 7 (D59)**
 
-- **Iterazione e messa a punto** → **k6 in locale** dal Mac.
-- **Numeri finali per le slide** → **k6 in un [Azure Container Apps Job](https://learn.microsoft.com/en-us/azure/container-apps/jobs)** in Italy North.
+- **Iterazione e messa a punto** → **k6 in locale** dal Mac. Questo è deciso.
+- **Numeri finali per le slide** → **da decidere**: k6 in locale dal Mac, oppure k6 in un [Azure Container Apps Job](https://learn.microsoft.com/en-us/azure/container-apps/jobs) in Italy North.
+
+⚠️ **Questa sezione diceva "DECISO: ACA Job", e non lo è.** L'ACA Job era stato promosso a `[M]` sulla base di ~765 ms che sembravano latenza di rete e non lo erano: **erano cold start** (D53 corregge D48, RTT Mac↔Italy North misurato ~34 ms). Caduta la premessa, il task è tornato `[S]` e la decisione è rinviata a Fase 7 **a parametri congelati** (D59): la domanda è se il Mac regga il tasso finale senza diventare lui il collo di bottiglia, e quel tasso non esisteva finché i tre worker non erano misurati. Deciderlo prima ripeterebbe l'errore di D50 e D53. Dato parziale: a 50 req/s con 500 VU il Mac ha retto senza una `dropped_iteration` (D57), ma la misura che conta non è quella — servono VU fissi e abbondanti, CPU locale osservata, e tasso ottenuto contro tasso richiesto.
+
+Se l'ACA Job servirà, due impostazioni non sono opzionali: `replicaRetryLimit` a **0** (un load test che riparte a metà genera carico due volte) e `replicaTimeout` dimensionato sulla durata realistica del test più margine.
 
 **Perché k6 e non Locust/JMeter su Azure Load Testing — scelta metodologica, non di gusto.**
 
@@ -314,17 +318,7 @@ Tre formulazioni ufficiali convergono ma non chiudono la questione:
 - ⚠️ **Prezzo al GB-secondo oltre il grant: FONTE UFFICIALE NON TROVATA.** L'[API dei prezzi retail](https://prices.azure.com/api/retail/prices) restituisce i meter di Flex Consumption a `0.0` in ogni regione provata, quindi il feed non li espone e la pagina pricing va letta a mano. Finché il prezzo non è verificato, il criterio di sicurezza è restare dentro il free grant.
 - **ACA Job**: piano Consumption, pagato al secondo solo durante l'esecuzione.
 - **Azure Load Testing** (solo per l'eventuale run dimostrativo): ⚠️ **URL DELLA PAGINA PRICING DA SALVARE**. Dati raccolti finora: nessun canone mensile sulla risorsa (la fee di $10/mese è stata rimossa), $0,15/VUH fino a 10.000 VUH mensili, e un addebito minimo per run introdotto dal 1° marzo 2026. **Da riverificare sulla pagina ufficiale prima di usarli.**
-- **Regola operativa**: iterare con k6 locale, usare l'ACA Job solo per i run che finiranno nelle slide.
-
----
-
-## Doppio trigger (parte narrativa, non misurata)
-
-Logica di resize in una funzione condivisa, wrappata in **due trigger**: HTTP (sottoposto a load test) e Blob (solo mostrato).
-
-Momento di presentazione: *"questa è la forma di produzione, questa è la forma che riesco a misurare, ed ecco perché sono diverse."*
-
-**Vincolo**: su Flex il [Blob storage trigger supporta solo la sorgente Event Grid](https://learn.microsoft.com/en-us/azure/azure-functions/flex-consumption-plan#considerations).
+- **Regola operativa**: iterare con k6 locale. Se l'ACA Job servirà (D59, ancora da decidere), usarlo solo per i run che finiranno nelle slide.
 
 ---
 
@@ -342,26 +336,26 @@ Momento di presentazione: *"questa è la forma di produzione, questa è la forma
 9. **La demo dal vivo non è una misura, e la sua latenza non è quella delle slide.** La Static Web App **non può stare in Italy North** con i worker: `Microsoft.Web/staticSites` esiste solo in Central US, East US 2, West US 2, West Europe e East Asia, e West Europe — la più vicina — è rifiutata da questa sottoscrizione (*"The selected region is currently not accepting new customers"*). Sta in **East US 2**. Due limiti diversi e facili da confondere: un tipo di risorsa che in una regione *non esiste*, e una regione che esiste ma *non accetta nuovi clienti* — il secondo non compare in nessuna tabella di disponibilità, si scopre al deploy. Il percorso misurato va da k6 alla function e da lì ad Application Insights: il frontend non ci compare mai (D93, D96).
 
 ### Sul billing
-9. **Su Flex si paga solo taglia dell'istanza × durata wall-clock.** CPU e memoria realmente consumata non entrano nel calcolo.
-10. **Differenza rispetto al Consumption classico**, dove la memoria media veniva misurata e arrotondata a multipli di 128 MB.
-11. **Minimo fatturabile di 1 secondo**, con la run dimostrativa "sotto il secondo".
-12. **Il vantaggio di footprint di Go non si traduce in risparmio diretto** su Flex.
-13. **Quanto costa eliminare il cold start con always-ready, e per quale linguaggio conviene di più.**
-14. **Se il cold start non è fatturato** (da verificare empiricamente): dove metti il codice di inizializzazione cambia se lo paghi.
-15. **Il "costo di un linguaggio" non è solo compute**: il licensing di ImageSharp sopra soglia di fatturato.
+10. **Su Flex si paga solo taglia dell'istanza × durata wall-clock.** CPU e memoria realmente consumata non entrano nel calcolo.
+11. **Differenza rispetto al Consumption classico**, dove la memoria media veniva misurata e arrotondata a multipli di 128 MB.
+12. **Minimo fatturabile di 1 secondo**, con la run dimostrativa "sotto il secondo".
+13. **Il vantaggio di footprint di Go non si traduce in risparmio diretto** su Flex.
+14. **Quanto costa eliminare il cold start con always-ready, e per quale linguaggio conviene di più.**
+15. **Se il cold start non è fatturato** (da verificare empiricamente): dove metti il codice di inizializzazione cambia se lo paghi.
+16. **Il "costo di un linguaggio" non è solo compute**: il licensing di ImageSharp sopra soglia di fatturato.
 
 ### Sui linguaggi e il tooling
-16. **I tre livelli di ottimizzazione** (C + SIMD assembly / managed + SIMD portabile / managed senza SIMD). Il livello di ottimizzazione non coincide col linguaggio.
-17. **`CGO_ENABLED=0` su Go** esclude libvips e simili: maturità disomogenea del tooling.
-18. **Go: first-class ≠ GA.** Public preview, non presente nella tabella dei language stack supportati.
-19. **`disintegration/imaging` non è più mantenuta.**
-20. **`golang.org/x/image/webp` è solo decoder**: motivo per cui l'output è JPEG.
-21. **Durable Functions non disponibili su Go** in preview.
-22. **Blob trigger vs HTTP trigger**: forma di produzione e forma misurabile sono diverse.
+17. **I tre livelli di ottimizzazione** (C + SIMD assembly / managed + SIMD portabile / managed senza SIMD). Il livello di ottimizzazione non coincide col linguaggio.
+18. **`CGO_ENABLED=0` su Go** esclude libvips e simili: maturità disomogenea del tooling.
+19. **Go: first-class ≠ GA.** Public preview, non presente nella tabella dei language stack supportati.
+20. **`disintegration/imaging` non è più mantenuta.**
+21. **`golang.org/x/image/webp` è solo decoder**: motivo per cui l'output è JPEG.
+22. **Durable Functions non disponibili su Go** in preview.
+23. **Blob trigger vs HTTP trigger**: forma di produzione e forma misurabile sono diverse. ⚠️ Si **racconta**, non si mostra: il doppio trigger è fuori scope e nessun worker ha un blob trigger.
 
 ### Fonti che correggono informazioni obsolete
-23. Fee mensile di Azure Load Testing rimossa, ma introdotto un addebito minimo per run.
-24. System.Drawing.Common deprecata per cross-platform.
+24. Fee mensile di Azure Load Testing rimossa, ma introdotto un addebito minimo per run.
+25. System.Drawing.Common deprecata per cross-platform.
 
 ---
 
@@ -423,10 +417,11 @@ Tutti da [Go developer reference](https://learn.microsoft.com/en-us/azure/azure-
 - **Metrica 3**: non separa il contributo della piattaforma da quello del linguaggio.
 - **L'autoscaling penalizza due volte il linguaggio più lento, ed è dentro la misura.** Con concorrenza 1, un linguaggio più lento occupa ogni istanza più a lungo, quindi ne richiede — e ne fa nascere — di più, quindi paga più cold start. La **curva client-side della Metrica 3 misura quindi il sistema (linguaggio + piattaforma), non il linguaggio**: va formulata così, mai come "X è N volte più veloce sotto burst". Le affermazioni sul solo linguaggio si prendono dalla durata server-side a regime, che non include il provisioning. Dettagli nel decision log, D58.
 - **La riproducibilità della Metrica 3 è limitata per costruzione**: la documentazione ufficiale dichiara che la scale curve è gestita dalla piattaforma e che forma e ritmo [possono cambiare nel tempo](https://learn.microsoft.com/en-us/azure/azure-functions/flex-consumption-plan#how-the-scale-curve-works). I tre linguaggi vanno quindi misurati il più vicino possibile nel tempo, e i numeri valgono per quella finestra.
-- **I percentili client-side sono latenza del backend vista da un client vicino, non da un utente reale.** Il generatore gira in un Container Apps Job nella stessa regione delle function: la latenza di rete è eliminata di proposito, perché è un offset costante e identico per i tre linguaggi e mascherare le differenze è tutto ciò che otterrebbe. Non vanno quindi letti come esperienza utente. Ordine di grandezza di quel che si toglie: dal Mac verso Italy North il RTT misurato è ~34 ms, e l'apertura di una connessione HTTPS ~120 ms fra DNS, TCP e TLS.
+- **I percentili client-side non sono esperienza utente, e cosa sono esattamente dipende da dove gira il generatore — che è ancora da decidere (D59).** In entrambi i casi la latenza di rete è un offset costante e identico per i tre linguaggi, quindi non cambia il *confronto*; cambia però cosa si può dire del numero assoluto. **Da un Container Apps Job** nella stessa regione delle function la rete è eliminata di proposito, e il numero è latenza del backend vista da un client vicinissimo. **Dal Mac** il numero include il tragitto casa↔Italy North, e va dichiarato: RTT misurato ~34 ms, apertura di una connessione HTTPS ~120 ms fra DNS, TCP e TLS (D53). In nessuno dei due casi è l'esperienza di un utente reale. **Questa limitazione va riscritta con la scelta effettiva prima delle slide.**
 - **`count=N` non è un moltiplicatore lineare**: le prime iterazioni costano molto più delle successive (su Python, 72 ms la prima contro ~17 ms a regime). Il valore di `count` scelto decide se si misura il riscaldamento o la velocità a regime, e non è garantito che la curva abbia la stessa forma nei tre linguaggi.
 - **L'overhead host↔worker va riportato separando la prima richiesta di ogni istanza dalle successive**: su Python la prima costa ~206 ms e le successive ~7,5 ms. Un valore aggregato dipenderebbe da quante istanze sono state create durante il run, cioè dalla forma del carico, non dal linguaggio.
 - **Una delle tre immagini di test è un JPEG *progressive*, le altre due sono baseline** — il nome del file lo dice (`anakin-recursion_progressive.jpg`). La decodifica progressive è un percorso di codice diverso e ottimizzato in modo diverso nelle tre librerie: misurata su Pillow, costa **2,6×** la stessa immagine in baseline (5,88 ms contro 2,22 ms mediani sul solo decode). Un run su quell'immagine misura quindi anche *come i tre runtime gestiscono il progressive*, che non è la tesi del talk. Il confronto fra linguaggi resta onesto — l'input è lo stesso per tutti e tre — ma i numeri non vanno messi sullo stesso piano di quelli ottenuti sulle altre due immagini.
+- **Go scala e codifica un canale in più.** La destinazione del resize in Go è un `image.RGBA`, cioè **4 byte per pixel**, mentre Pillow lavora su `RGB` e ImageSharp è configurato su `Rgb24`, entrambi a 3. Non è una svista: `jpeg.Decode` restituisce di norma un `*image.YCbCr` — l'immagine già sottocampionata — e scalare direttamente lì dentro vorrebbe dire interpolare nello spazio YCbCr 4:2:0 invece che in RGB, che è un'asimmetria peggiore e invisibile, dentro il passo più costoso della pipeline. La stdlib Go **non offre un tipo a 3 canali** con cui fare altrimenti, quindi `RGBA` è il minimo comune denominatore disponibile: il canale alfa viene scalato insieme agli altri tre e poi scartato dall'encoder. Il costo resta **dentro il cronometro**, ed è corretto che ci resti — è lavoro che Go deve fare davvero — ma va detto accanto ai numeri, perché una parte della differenza di Go su resize ed encode è questa e non il linguaggio (D85 punto 2).
 - **Le librerie di image processing non si caricano nello stesso momento del ciclo di vita.** In Python `from PIL import Image` sta a livello di modulo, quindi Pillow entra in memoria durante l'app init; in .NET l'assembly di ImageSharp si carica pigramente al **primo uso**, cioè dentro la prima richiesta. Le immagini di test invece si caricano in app init in entrambi (è una scelta esplicita, non un default). Forzare un warm-up di ImageSharp sarebbe codice che nessuno scrive in produzione, quindi non si fa: è una differenza reale tra i due ecosistemi e va detta, soprattutto accanto ai numeri della Metrica 2 e della Metrica 4.
 - **Solo .NET ha ReadyToRun, e lo usa.** È compilazione ahead-of-time del codice managed, e Python e Go non hanno un equivalente: il cold start .NET beneficia di un'ottimizzazione che gli altri due non possono avere. Non è un trucco — è la scelta che si mette davvero in produzione, e la regola del realismo chiede quella — ma va detta. **Non è gratis**: il pacchetto di deploy passa da 5,96 a 12,1 MB (lo zip da 2,75 a 5,47 MB), e su Flex il pacchetto viene scaricato a ogni cold start. Il saldo fra JIT risparmiato e byte in più da scaricare è una misura della Metrica 2, non un'assunzione.
 - **Core allocati per instance size sono valori tipici**, non garantiti al singolo run.

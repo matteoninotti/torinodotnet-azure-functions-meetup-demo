@@ -23,6 +23,6 @@ Il pacchetto di deploy è la cartella che contiene `host.json`, e niente al di f
 - `GET /api/images` → `{"images": []}`
 - `GET /api/health` → `"images": []`
 - `POST /api/resize?image=<qualunque>` → `404`
-- in locale, 9 test si auto-saltano invece di fallire
+- in locale, **13 test si auto-saltano** invece di fallire
 
 È voluto — un'istanza senza immagini deve dirlo chiaramente invece di andare in crash all'avvio — ma significa che **una copia dimenticata non si manifesta come errore di deploy**. Controllare `GET /api/images` dopo ogni deploy è il modo più veloce per accorgersene.

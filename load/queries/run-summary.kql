@@ -14,6 +14,16 @@
 // Attenzione all'ingestion: tra la fine di un run e la sua comparsa qui
 // passano 2-4 minuti. Una query lanciata subito restituisce meno righe di
 // quante ne siano davvero state servite.
+//
+// ⚠️ IL RISULTATO HA DUE RIGHE PER LINGUAGGIO, e vanno lette separate.
+// `phase` distingue la PRIMA richiesta servita da ciascuna istanza da tutte le
+// successive. La separazione non e' un raffinamento: D50 ha ritrattato un
+// numero proprio perche' era stato calcolato senza di essa. L'overhead
+// host<->worker vale ~180-200 ms sulla prima richiesta di un'istanza e ~7 ms
+// sulle successive, quindi un valore aggregato dipende da quante istanze sono
+// nate durante il run — cioe' dalla forma del carico, non dal linguaggio.
+// Sommare le due righe e' lecito solo per i conteggi (requests, ok, failed),
+// mai per i percentili.
 
 let win_start = datetime(2026-09-10T16:03:50Z);
 let win_end   = datetime(2026-09-10T16:04:20Z);
@@ -37,27 +47,45 @@ AppRequests
 // riuscita, quindi un inner join scarterebbe in silenzio ogni 4xx/5xx — cioe'
 // proprio le richieste che sotto burst interessano di piu' (D45).
 | join kind=leftouter metrics on OperationId
+| extend language = coalesce(language, 'n/d')
+// L'overhead si calcola RIGA PER RIGA e poi se ne prendono i percentili. La
+// differenza di due mediane, che questa query faceva prima, non e' la mediana
+// delle differenze: e' un numero che non corrisponde a nessuna richiesta
+// realmente servita, e su un run dove le istanze nascono di continuo restituiva
+// il valore che D50 ha ritrattato (182,74 ms sulla finestra qui sopra).
+| extend overhead_ms = DurationMs - total_ms
+// Partizione per istanza: ordinando per istanza e poi per tempo, la riga in cui
+// l'istanza cambia e' la prima richiesta servita da quell'istanza. Serve un
+// flusso serializzato, che e' cio' che `sort by` produce.
+// Non serve partizionare anche per linguaggio: un AppRoleInstance appartiene a
+// una sola function app, quindi a un solo linguaggio.
+| sort by AppRoleInstance asc, TimeGenerated asc
+| extend rank_on_instance = row_number(1, prev(AppRoleInstance) != AppRoleInstance)
+| extend phase = iff(rank_on_instance == 1, '1-prima sull istanza', '2-successive')
 | summarize
     requests      = count(),
     ok            = countif(ResultCode == '200'),
     failed        = countif(ResultCode != '200'),
     with_metrics  = countif(isnotnull(total_ms)),
+    // Quante istanze compaiono in questa fase: sulla riga "prima" e' il numero
+    // di istanze nate o riusate durante la finestra, ed e' il contesto senza
+    // il quale i percentili dell'altra riga non si interpretano.
+    instances     = dcount(AppRoleInstance),
+    p50_total_ms  = percentile(total_ms, 50),
+    p95_total_ms  = percentile(total_ms, 95),
     p50_server_ms = percentile(DurationMs, 50),
     p95_server_ms = percentile(DurationMs, 95),
     p99_server_ms = percentile(DurationMs, 99),
-    p50_total_ms  = percentile(total_ms, 50),
-    p95_total_ms  = percentile(total_ms, 95),
+    p50_overhead_ms = percentile(overhead_ms, 50),
+    p95_overhead_ms = percentile(overhead_ms, 95),
     // Se il sampling fosse acceso questo sarebbe > 1 su almeno una riga: e' il
     // campo con cui Application Insights dichiara il fattore di sampling, piu'
     // diretto che contare le righe (D14, D41). Va guardato a ogni run, non una
     // volta sola: un p95 su un campione non uniforme non e' un p95.
     sampling_max  = max(ItemCount)
-  by language = coalesce(language, 'n/d')
-| extend success_pct     = round(100.0 * ok / requests, 2),
-         // La differenza tra durata server-side e cronometro interno: overhead
-         // host-worker piu' piattaforma. E' la scomposizione che D25 prometteva
-         // di ricavare per sottrazione invece che con tre cronometri separati.
-         p50_overhead_ms = round(p50_server_ms - p50_total_ms, 2)
-| project language, requests, ok, failed, success_pct, with_metrics,
-          p50_total_ms, p50_server_ms, p50_overhead_ms,
+  by language, phase
+| extend success_pct = round(100.0 * ok / requests, 2)
+| project language, phase, requests, ok, failed, success_pct, with_metrics, instances,
+          p50_total_ms, p50_server_ms, p50_overhead_ms, p95_overhead_ms,
           p95_total_ms, p95_server_ms, p99_server_ms, sampling_max
+| order by language asc, phase asc

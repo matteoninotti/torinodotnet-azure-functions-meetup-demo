@@ -1,3 +1,13 @@
+# ⚠️ Questo file NON governa il pacchetto deployato.
+#
+# Il pacchetto Go si assembla a mano in CI — `go build`, piu' host.json e
+# images/ copiati accanto — perche' `func pack` produce uno zip con dentro solo
+# `app` e `host.json` e le immagini non ci entrerebbero (D86). Quel percorso non
+# legge .funcignore: cosa finisce nel pacchetto lo decide lo step "Build del
+# worker Go" in .github/workflows/deploy.yml, e nient'altro.
+#
+# Resta qui perche' vale per `func start` in locale e per un eventuale
+# `func pack` esplorativo. Modificarlo non cambia niente di cio' che si deploya.
 .git*
 .vscode
 local.settings.json

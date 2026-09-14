@@ -16,6 +16,19 @@ az monitor log-analytics query -w "$WS" --analytics-query "$(cat load/queries/ru
 
 Prima di lanciarle si sostituiscono `win_start` e `win_end` in cima al file con la finestra del run. k6 stampa `RUN_START` e `RUN_END` già in UTC apposta.
 
+## `run-summary.kql` restituisce **due righe per linguaggio**
+
+La colonna `phase` separa la **prima richiesta servita da ciascuna istanza** (`1-prima sull istanza`) da **tutte le successive** (`2-successive`). Non è un raffinamento: è il motivo per cui D50 ha dovuto ritrattare un numero già detto.
+
+L'overhead host↔worker vale ~180–200 ms sulla prima richiesta di un'istanza e ~7 ms sulle successive. Un valore unico dipende quindi da **quante istanze sono nate durante il run**, cioè dalla forma del carico, non dal linguaggio — e su un run in scale-out dà un numero venticinque volte più grande di quello a regime.
+
+Due conseguenze pratiche:
+
+- `p50_overhead_ms` è la **mediana delle differenze riga per riga**, non la differenza di due mediane. La seconda non corrisponde a nessuna richiesta realmente servita.
+- Le due righe si sommano solo sui **conteggi** (`requests`, `ok`, `failed`). **Mai sui percentili.**
+
+La colonna `instances` dice quante istanze compaiono in ciascuna fase: senza quel contesto i percentili dell'altra riga non si interpretano.
+
 ## Tre cose che è facile sbagliare
 
 **La query string è redatta nella telemetria.** L'host di Azure Functions sostituisce i valori dei parametri (`?image=Redacted&width=Redacted`, D41), quindi da `AppRequests` **non** si può sapere con che `count` o `width` è stata servita una richiesta. È il motivo per cui la join con `AppTraces` non è un'ottimizzazione ma l'unico modo di saperlo — e perché i run si isolano per finestra temporale e non per parametro.

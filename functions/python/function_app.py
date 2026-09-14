@@ -58,7 +58,13 @@ def resize(req: func.HttpRequest) -> func.HttpResponse:
         "height": result.height,
         "quality": params.quality,
         "output_bytes": result.output_bytes,
-        "total_ms": round(result.total_ms, 3),
+        # NON arrotondato, in nessuno dei tre worker: round() di Python e
+        # Math.Round di C# mandano 0.5 al pari, math.Round di Go arrotonda per
+        # eccesso in valore assoluto, e sullo stesso valore i tre emettevano
+        # cifre diverse. E' la stessa classe di asimmetria che D7 evita per
+        # l'altezza, tolta allo stesso modo: non scegliendo un arrotondamento,
+        # ma non arrotondando. Ad arrotondare ci pensa chi legge.
+        "total_ms": result.total_ms,
     }
     logging.info("%s %s", METRICS_PREFIX, json.dumps(metrics, separators=(",", ":")))
 
