@@ -62,3 +62,9 @@ meme-candidates/
 
 # Stato locale dell'harness Claude Code, non del progetto
 .claude/
+
+# Documenti degli audit: restano locali per D38 — sono meta-discussione sul
+# progetto (cosa e' stato trovato, perche' si e' scelto cosi', giudizi sul
+# lavoro fatto), e il repo e' pubblico e permanente. Nel repo va il piano
+# operativo; il perche' sta nel decision log, nel vault.
+audit/
