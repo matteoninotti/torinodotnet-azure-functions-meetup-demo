@@ -31,3 +31,35 @@ Risposta JSON di default (dimensioni, byte, tempi). `return=image` restituisce i
 **Gli intervalli sono identici nei tre worker, e identico è anche cosa conta come numero valido**: solo cifre ASCII, `^[0-9]+$` — niente segno, spazi, separatori di cifre o cifre non ASCII. I casi sono fissati in `shared/conformance/param_cases.json` e le tre suite di test li leggono da lì, perché tre parser idiomatici (`int()`, `int.TryParse`, `strconv.Atoi`) accettano tre insiemi diversi di stringhe e "stesso contratto" smetterebbe di essere vero.
 
 I tetti di `count` e `width` sono dimensionati su ciò che l'esperimento usa (`count=80`, `width=800`), non sul massimo rappresentabile: su un endpoint anonimo il caso peggiore lo paga il free grant.
+
+## Lanciare i test in locale
+
+⚠️ **Su un clone appena fatto le tre suite falliscono, ed è voluto.** Le immagini di test non stanno nel repo: restano in locale e si iniettano nel pacchetto a deploy-time. Senza di esse i test che dipendono dalle immagini **falliscono invece di auto-saltarsi**, perché sono quelli che verificano la conformità fra i tre linguaggi — geometria dell'output, parametri dell'encoder, tetti dei parametri — e una suite che si auto-salta resta verde senza aver verificato niente.
+
+Il messaggio di fallimento dice già quale comando lanciare. Prima dei test, quindi:
+
+```bash
+./scripts/sync-images.sh all
+```
+
+Copia le immagini dalla sorgente unica `functions/images/` nelle tre cartelle di destinazione. Se anche la sorgente è vuota — è il caso di un clone nuovo — lo script si ferma dicendolo: i file veri vanno messi lì a mano, oppure li scarica la pipeline da un container privato dello stesso storage account.
+
+Poi, una suite per linguaggio. Python vuole prima le dipendenze di sviluppo (Pillow più `pytest`), in un ambiente virtuale su Python 3.12 — la stessa minore dichiarata nel Bicep, perché Pillow non è la stessa build su due minori diverse:
+
+```bash
+pip install -r functions/python/requirements-dev.txt
+```
+
+```bash
+pytest functions/python -q
+```
+
+```bash
+cd functions/go && go test ./...
+```
+
+```bash
+dotnet test functions/dotnet-tests/ResizeWorker.Tests.csproj -c Release --nologo
+```
+
+In CI non serve farci caso: `sync-images.sh` gira prima degli step di test, sempre.
