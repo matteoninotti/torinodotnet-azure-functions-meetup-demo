@@ -178,6 +178,29 @@ public sealed class ResizeCoreTests
             () => ResizeCore.ParseParams(Query(("image", RequireImage()), (field, value))));
     }
 
+    /// <summary>
+    /// Il tetto di <c>count</c> arriva davvero fino al punto d'ingresso.
+    ///
+    /// I casi condivisi esercitano <c>ParseInt</c> direttamente: verificano la
+    /// funzione di parsing, non che il tetto giusto sia quello cablato in
+    /// <c>ParseParams</c>. Dimostrato in Python: mettendo la costante sbagliata
+    /// nel punto d'ingresso, cioe' un tetto effettivo di 4.000 su <c>count</c>,
+    /// l'intera suite restava verde (D104).
+    /// </summary>
+    [Fact]
+    public void ParseParamsAppliesTheCountCeiling()
+    {
+        string image = RequireImage();
+
+        Params alLimite = ResizeCore.ParseParams(
+            Query(("image", image), ("count", ResizeCore.MaxCount.ToString(CultureInfo.InvariantCulture))));
+        Assert.Equal(ResizeCore.MaxCount, alLimite.Count);
+
+        Assert.Throws<InvalidParameterException>(
+            () => ResizeCore.ParseParams(
+                Query(("image", image), ("count", (ResizeCore.MaxCount + 1).ToString(CultureInfo.InvariantCulture)))));
+    }
+
     // --- Pipeline (richiede le immagini di test) ----------------------------
 
     /// <summary>

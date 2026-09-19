@@ -124,6 +124,29 @@ def test_parse_params_rejects_out_of_range(field, value):
         resize_core.parse_params(_params(image=images[0], **{field: value}))
 
 
+def test_parse_params_applies_the_count_ceiling():
+    """Il tetto di `count` arriva davvero fino al punto d'ingresso.
+
+    I casi condivisi esercitano `_parse_int` passandogli i limiti PRESI DAL FILE,
+    quindi verificano che file e codice dichiarino lo stesso numero — non che
+    quel numero sia poi quello che l'endpoint applica. Dimostrato: cablando
+    MAX_WIDTH al posto di MAX_COUNT in parse_params, cioe' un tetto effettivo di
+    4.000 su `count`, l'intera suite restava verde (D104).
+
+    Questo test chiude quel buco chiamando parse_params e non _parse_int, e con
+    le costanti del worker e non quelle del file.
+    """
+    images = resize_core.available_images()
+    if not images:
+        pytest.skip("nessuna immagine di test nel pacchetto (task aperto, Fase 1)")
+
+    al_limite = resize_core.parse_params(_params(image=images[0], count=str(resize_core.MAX_COUNT)))
+    assert al_limite.count == resize_core.MAX_COUNT
+
+    with pytest.raises(resize_core.InvalidParameter):
+        resize_core.parse_params(_params(image=images[0], count=str(resize_core.MAX_COUNT + 1)))
+
+
 # --- Pipeline (richiede le immagini di test) --------------------------------
 
 requires_images = pytest.mark.skipif(

@@ -16,6 +16,7 @@ import (
 	"image/jpeg"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 )
 
@@ -204,6 +205,31 @@ func TestParseParamsRejectsOutOfRange(t *testing.T) {
 		if _, ok := err.(*invalidParameterError); !ok {
 			t.Errorf("%s=%s: atteso invalidParameterError, ottenuto %T (%v)", c.field, c.value, err, err)
 		}
+	}
+}
+
+// Il tetto di `count` arriva davvero fino al punto d'ingresso.
+//
+// I casi condivisi esercitano parseInt passandogli i limiti PRESI DAL FILE
+// (spec.Min, spec.Max), quindi verificano che file e codice dichiarino lo stesso
+// numero — non che quel numero sia poi quello che l'endpoint applica.
+// Dimostrato in Python: cablando il tetto sbagliato dentro parse_params l'intera
+// suite restava verde (D104). Qui si chiama parseParams e non parseInt, e si usa
+// maxCount e non spec.Max.
+func TestParseParamsAppliesTheCountCeiling(t *testing.T) {
+	image := requireImage(t)
+
+	p, err := parseParams(query(map[string]string{"image": image, "count": strconv.Itoa(maxCount)}))
+	if err != nil {
+		t.Fatalf("count=%d: atteso accettato, ottenuto %v", maxCount, err)
+	}
+	if p.Count != maxCount {
+		t.Errorf("count=%d: atteso %d, ottenuto %d", maxCount, maxCount, p.Count)
+	}
+
+	_, err = parseParams(query(map[string]string{"image": image, "count": strconv.Itoa(maxCount + 1)}))
+	if _, ok := err.(*invalidParameterError); !ok {
+		t.Errorf("count=%d: atteso invalidParameterError, ottenuto %T (%v)", maxCount+1, err, err)
 	}
 }
 
