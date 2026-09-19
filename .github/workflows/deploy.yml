@@ -44,6 +44,16 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Il vincolo "solo da main" vive QUI e non solo nello step sotto. Un
+    # workflow_dispatch esegue il workflow del ref scelto ([events that trigger
+    # workflows](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows):
+    # "each workflow run will use the version of the workflow that is present in
+    # the associated commit SHA or Git ref of the event"), quindi un guard
+    # scritto nel file non esiste sui branch che non lo contengono — cioe'
+    # proprio quelli da fermare. La deployment branch policy dell'environment e'
+    # configurazione del repository: il contenuto del ref non la tocca, e
+    # GitHub la applica prima che il job parta.
+    environment: production
     steps:
       # Il vincolo esiste gia' di fatto — la credenziale federata OIDC e'
       # registrata sul solo subject `refs/heads/main`, quindi da un branch di
