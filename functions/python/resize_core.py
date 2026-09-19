@@ -38,7 +38,8 @@ MAX_QUALITY = 95
 # I tetti sono dimensionati su cio' che l'esperimento usa davvero (width=800,
 # count=80 — D89), non sul massimo tecnicamente rappresentabile: su un endpoint
 # anonimo il caso peggiore lo paga il free grant. I conti che portano a questi
-# due numeri stanno nel decision log (D100).
+# due numeri stanno nel decision log (D100; il tetto di count e' stato
+# rialzato da 200 a 500 in D104).
 #
 # Gli stessi due numeri valgono identici in .NET e Go, e il frontend non offre
 # nulla oltre questi: un tetto diverso fra i tre worker sarebbe un'asimmetria
@@ -46,7 +47,7 @@ MAX_QUALITY = 95
 MIN_WIDTH = 1
 MAX_WIDTH = 4_000
 MIN_COUNT = 1
-MAX_COUNT = 200
+MAX_COUNT = 500
 
 IMAGES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "images")
 _IMAGE_SUFFIXES = (".jpg", ".jpeg")

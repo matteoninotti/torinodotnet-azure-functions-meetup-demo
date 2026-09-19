@@ -23,7 +23,7 @@ Materiale della demo per il talk **TorinoDotNet del 30 settembre 2026 @ Toolbox*
 ## Il contratto dell'endpoint
 
 ```
-POST /api/resize?image=<nome>&count=<1-200>&width=<1-4000>&quality=<1-95>[&hash=1][&return=image]
+POST /api/resize?image=<nome>&count=<1-500>&width=<1-4000>&quality=<1-95>[&hash=1][&return=image]
 ```
 
 Risposta JSON di default (dimensioni, byte, tempi). `return=image` restituisce il JPEG per la demo visiva e **non va mai usato durante i run di misura**.
