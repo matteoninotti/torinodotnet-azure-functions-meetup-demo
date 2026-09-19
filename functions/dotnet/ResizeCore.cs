@@ -152,8 +152,9 @@ public static class ResizeCore
     ///
     /// <para>Pubblico come TargetHeight, e per lo stesso motivo: i casi attesi
     /// stanno in shared/conformance/param_cases.json e il test li esercita su
-    /// questo metodo, non attraverso ParseParams — che richiederebbe le immagini
-    /// e si salterebbe dove non ci sono.</para>
+    /// questo metodo, non attraverso ParseParams — che richiederebbe le immagini.
+    /// Che il tetto arrivi davvero fino a ParseParams lo verifica un test a
+    /// parte, ParseParamsAppliesTheCountCeiling (D105).</para>
     ///
     /// <para><c>NumberStyles.None</c> e cultura invariante non sono zelo: sono il
     /// pezzo che rende il contratto lo stesso nei tre worker. Il

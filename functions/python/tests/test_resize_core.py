@@ -95,6 +95,30 @@ def _params(**overrides):
     return values.get
 
 
+# --- Immagini di test: si FALLISCE, non si salta -----------------------------
+#
+# Questi helper facevano `pytest.skip`. Non piu': una suite che si auto-salta
+# resta verde senza aver verificato niente, e i test che dipendono dalle
+# immagini sono proprio quelli che presidiano la conformita' fra i tre
+# linguaggi — geometria dell'output, parametri dell'encoder, tetti dei
+# parametri. Un cancello che passa da solo quando manca un file non e' un
+# cancello (D107). E' la politica che .NET aveva gia'; ora ce l'hanno tutti e
+# tre. In CI le immagini ci sono sempre, perche' sync-images.sh gira prima dei
+# test.
+
+
+def _require_images():
+    """L'elenco delle immagini disponibili, o fallisce dicendo cosa lanciare."""
+    images = resize_core.available_images()
+    assert images, "nessuna immagine di test in functions/python/images/: lanciare ./scripts/sync-images.sh python"
+    return images
+
+
+def _require_image():
+    """La prima immagine disponibile, o fallisce come _require_images."""
+    return _require_images()[0]
+
+
 def test_parse_params_requires_image():
     with pytest.raises(resize_core.InvalidParameter):
         resize_core.parse_params(_params())
@@ -117,11 +141,8 @@ def test_parse_params_unknown_image_is_not_found():
 )
 def test_parse_params_rejects_out_of_range(field, value):
     # Serve un'immagine valida perche' il controllo su image viene prima.
-    images = resize_core.available_images()
-    if not images:
-        pytest.skip("nessuna immagine di test nel pacchetto (task aperto, Fase 1)")
     with pytest.raises(resize_core.InvalidParameter):
-        resize_core.parse_params(_params(image=images[0], **{field: value}))
+        resize_core.parse_params(_params(image=_require_image(), **{field: value}))
 
 
 def test_parse_params_applies_the_count_ceiling():
@@ -136,60 +157,49 @@ def test_parse_params_applies_the_count_ceiling():
     Questo test chiude quel buco chiamando parse_params e non _parse_int, e con
     le costanti del worker e non quelle del file.
     """
-    images = resize_core.available_images()
-    if not images:
-        pytest.skip("nessuna immagine di test nel pacchetto (task aperto, Fase 1)")
+    image = _require_image()
 
-    al_limite = resize_core.parse_params(_params(image=images[0], count=str(resize_core.MAX_COUNT)))
+    al_limite = resize_core.parse_params(_params(image=image, count=str(resize_core.MAX_COUNT)))
     assert al_limite.count == resize_core.MAX_COUNT
 
     with pytest.raises(resize_core.InvalidParameter):
-        resize_core.parse_params(_params(image=images[0], count=str(resize_core.MAX_COUNT + 1)))
+        resize_core.parse_params(_params(image=image, count=str(resize_core.MAX_COUNT + 1)))
 
 
 # --- Pipeline (richiede le immagini di test) --------------------------------
 
-requires_images = pytest.mark.skipif(
-    not resize_core.available_images(),
-    reason="nessuna immagine di test nel pacchetto (task aperto, Fase 1)",
-)
 
-
-@requires_images
 def test_pipeline_is_deterministic_within_python():
     """Stesso input, stessi parametri, stesso output byte per byte.
 
     E' quanto l'esperimento promette: determinismo INTERNO a ciascun
     linguaggio. Non promette che i tre producano lo stesso file.
     """
-    params = resize_core.parse_params(_params(image=resize_core.available_images()[0], hash="1"))
+    params = resize_core.parse_params(_params(image=_require_image(), hash="1"))
     first = resize_core.run_pipeline(params)
     second = resize_core.run_pipeline(params)
     assert first.sha256 == second.sha256
     assert first.output_bytes == second.output_bytes
 
 
-@requires_images
 def test_pipeline_count_does_not_change_the_output():
     """count=N e' una manopola sul tempo, non sul risultato."""
-    image = resize_core.available_images()[0]
+    image = _require_image()
     once = resize_core.run_pipeline(resize_core.parse_params(_params(image=image, hash="1")))
     thrice = resize_core.run_pipeline(resize_core.parse_params(_params(image=image, count="3", hash="1")))
     assert once.sha256 == thrice.sha256
     assert once.height == thrice.height
 
 
-@requires_images
 def test_pipeline_hash_is_off_by_default():
-    params = resize_core.parse_params(_params(image=resize_core.available_images()[0]))
+    params = resize_core.parse_params(_params(image=_require_image()))
     assert resize_core.run_pipeline(params).sha256 is None
 
 
 def _require_named_image(name):
     """Byte di un'immagine PRECISA, per i test che hanno bisogno di dimensioni note."""
     payload = resize_core.source_bytes(name)
-    if payload is None:
-        pytest.skip(f"{name} non e' in functions/python/images/: lanciare ./scripts/sync-images.sh python")
+    assert payload is not None, f"{name} non e' in functions/python/images/: lanciare ./scripts/sync-images.sh python"
     return payload
 
 
@@ -255,7 +265,6 @@ def _read_jpeg_encoding(data):
     raise AssertionError("nessun marker SOF trovato nel JPEG prodotto")
 
 
-@requires_images
 def test_pipeline_output_is_baseline_420():
     """I tre worker devono produrre lo STESSO formato di JPEG.
 
@@ -264,7 +273,7 @@ def test_pipeline_output_is_baseline_420():
     promette che la simmetria e' verificata invece che sperata.
     """
     result = resize_core.run_pipeline(
-        resize_core.parse_params(_params(image=resize_core.available_images()[0]))
+        resize_core.parse_params(_params(image=_require_image()))
     )
     sof, luma_sampling = _read_jpeg_encoding(result.payload)
     assert sof == 0xC0, f"atteso SOF0 (baseline), ottenuto 0x{sof:02X}"
@@ -277,14 +286,13 @@ def test_pipeline_output_is_baseline_420():
         assert not produced.info.get("progressive")
 
 
-@requires_images
 def test_pipeline_output_honours_the_quality_parameter():
     """Qualita' piu' bassa deve produrre meno byte.
 
     La qualita' non si legge dai marker senza reimplementare le tabelle di
     quantizzazione, ma un effetto osservabile ce l'ha.
     """
-    image = resize_core.available_images()[0]
+    image = _require_image()
     small = resize_core.run_pipeline(
         resize_core.parse_params(_params(image=image, quality="20"))
     ).output_bytes
@@ -303,17 +311,17 @@ def test_image_catalog_is_consistent_with_available_images():
     E' il contratto su cui si regge il selettore della SWA: se divergessero,
     il frontend offrirebbe scelte che l'endpoint di resize rifiuta con 404.
     """
+    images = _require_images()
     catalog = resize_core.image_catalog()
-    assert [entry["name"] for entry in catalog] == resize_core.available_images()
+    assert [entry["name"] for entry in catalog] == images
 
 
-@requires_images
 def test_image_catalog_reports_real_byte_sizes():
+    _require_images()  # senza, il ciclo sotto non gira e il test passa a vuoto
     for entry in resize_core.image_catalog():
         assert entry["bytes"] > 0
 
 
-@requires_images
 def test_source_bytes_matches_the_catalog_size():
     """I byte serviti dalla demo devono essere gli stessi che il catalogo conta.
 
@@ -321,6 +329,7 @@ def test_source_bytes_matches_the_catalog_size():
     da cio' che la pipeline ha davvero ricevuto in ingresso, e il confronto
     prima/dopo direbbe una cosa falsa.
     """
+    _require_images()  # senza, il ciclo sotto non gira e il test passa a vuoto
     for entry in resize_core.image_catalog():
         payload = resize_core.source_bytes(entry["name"])
         assert payload is not None

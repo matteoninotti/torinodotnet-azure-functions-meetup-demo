@@ -18,7 +18,7 @@ public sealed class ResizeCoreTests
 {
     // Le immagini si caricano una volta per assembly, come fa Program.cs in app
     // init. Senza questa chiamata il catalogo resterebbe vuoto e ogni test che
-    // dipende dalle immagini si salterebbe, anche con la sincronizzazione fatta.
+    // dipende dalle immagini fallirebbe, anche con la sincronizzazione fatta.
     static ResizeCoreTests() => ResizeCore.Initialize();
 
     private sealed record HeightCase(int SrcWidth, int SrcHeight, int DstWidth, int Expected, string Why);
@@ -204,12 +204,13 @@ public sealed class ResizeCoreTests
     // --- Pipeline (richiede le immagini di test) ----------------------------
 
     /// <summary>
-    /// I test Python si auto-saltano quando mancano le immagini; qui falliscono
-    /// con un messaggio che dice cosa lanciare. Non e' una divergenza dal
-    /// contratto — riguarda la suite, non la pipeline misurata — ed e' la scelta
-    /// piu' sicura: xunit 2.x non ha uno skip dinamico senza pacchetti in piu',
-    /// e una suite che si auto-salta in silenzio resta verde senza aver
-    /// verificato niente. In CI le immagini ci sono sempre, perche'
+    /// Quando mancano le immagini i test falliscono con un messaggio che dice
+    /// cosa lanciare, invece di auto-saltarsi: una suite che si auto-salta in
+    /// silenzio resta verde senza aver verificato niente, e questi sono i test
+    /// che presidiano la conformita' fra i tre linguaggi. Qui era cosi' fin
+    /// dall'inizio, anche perche' xunit 2.x non ha uno skip dinamico senza
+    /// pacchetti in piu'; Python e Go saltavano e sono stati allineati a questa
+    /// politica in D107. In CI le immagini ci sono sempre, perche'
     /// sync-images.sh gira prima del build.
     /// </summary>
     private static string RequireImage()
