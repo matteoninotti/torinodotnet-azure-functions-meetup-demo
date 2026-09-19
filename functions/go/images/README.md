@@ -23,7 +23,9 @@ Il pacchetto di deploy è la cartella che contiene `host.json`, e niente al di f
 - `GET /api/images` → `{"images": []}`
 - `GET /api/health` → `"images": []`
 - `POST /api/resize?image=<qualunque>` → `404`
-- in locale, **10 test si auto-saltano** (`t.Skip`) invece di fallire
+- in locale, i test che richiedono le immagini **si auto-saltano** (`t.Skip`) **invece di fallire**: `go test ./... -v | grep -- '--- SKIP'` li elenca
+
+> Il **numero** di test che si saltano non è scritto qui di proposito: cambia a ogni test aggiunto, ed è già andato stantio tre volte in cinque giorni. Il comando qui sopra dà quello vero; il README di `functions/dotnet/images/` non ne ha bisogno affatto, perché là i test **falliscono** con l'istruzione da eseguire invece di saltare.
 
 ⚠️ La tolleranza vale per la cartella **assente o vuota**, non per un file che c'è e non si legge: quello è `log.Fatalf`, come in Python e .NET, perché servire due immagini su tre invece di tre invaliderebbe il confronto senza nessun segnale.
 
