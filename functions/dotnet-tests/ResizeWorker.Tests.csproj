@@ -45,7 +45,8 @@
   <!--
     Le immagini di test arrivano dalla destinazione del worker, popolata da
     scripts/sync-images.sh. Se non e' stato lanciato la cartella e' vuota e i
-    test che ne hanno bisogno si saltano, esattamente come in Python.
+    test che ne hanno bisogno falliscono dicendo cosa lanciare, come in
+    Python e Go (D107).
   -->
   <ItemGroup>
     <Content Include="..\dotnet\images\**"

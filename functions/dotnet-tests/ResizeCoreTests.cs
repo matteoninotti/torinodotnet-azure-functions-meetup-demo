@@ -18,7 +18,7 @@ public sealed class ResizeCoreTests
 {
     // Le immagini si caricano una volta per assembly, come fa Program.cs in app
     // init. Senza questa chiamata il catalogo resterebbe vuoto e ogni test che
-    // dipende dalle immagini si salterebbe, anche con la sincronizzazione fatta.
+    // dipende dalle immagini fallirebbe, anche con la sincronizzazione fatta.
     static ResizeCoreTests() => ResizeCore.Initialize();
 
     private sealed record HeightCase(int SrcWidth, int SrcHeight, int DstWidth, int Expected, string Why);
@@ -178,15 +178,39 @@ public sealed class ResizeCoreTests
             () => ResizeCore.ParseParams(Query(("image", RequireImage()), (field, value))));
     }
 
+    /// <summary>
+    /// Il tetto di <c>count</c> arriva davvero fino al punto d'ingresso.
+    ///
+    /// I casi condivisi esercitano <c>ParseInt</c> direttamente: verificano la
+    /// funzione di parsing, non che il tetto giusto sia quello cablato in
+    /// <c>ParseParams</c>. Dimostrato in Python: mettendo la costante sbagliata
+    /// nel punto d'ingresso, cioe' un tetto effettivo di 4.000 su <c>count</c>,
+    /// l'intera suite restava verde (D104).
+    /// </summary>
+    [Fact]
+    public void ParseParamsAppliesTheCountCeiling()
+    {
+        string image = RequireImage();
+
+        Params alLimite = ResizeCore.ParseParams(
+            Query(("image", image), ("count", ResizeCore.MaxCount.ToString(CultureInfo.InvariantCulture))));
+        Assert.Equal(ResizeCore.MaxCount, alLimite.Count);
+
+        Assert.Throws<InvalidParameterException>(
+            () => ResizeCore.ParseParams(
+                Query(("image", image), ("count", (ResizeCore.MaxCount + 1).ToString(CultureInfo.InvariantCulture)))));
+    }
+
     // --- Pipeline (richiede le immagini di test) ----------------------------
 
     /// <summary>
-    /// I test Python si auto-saltano quando mancano le immagini; qui falliscono
-    /// con un messaggio che dice cosa lanciare. Non e' una divergenza dal
-    /// contratto — riguarda la suite, non la pipeline misurata — ed e' la scelta
-    /// piu' sicura: xunit 2.x non ha uno skip dinamico senza pacchetti in piu',
-    /// e una suite che si auto-salta in silenzio resta verde senza aver
-    /// verificato niente. In CI le immagini ci sono sempre, perche'
+    /// Quando mancano le immagini i test falliscono con un messaggio che dice
+    /// cosa lanciare, invece di auto-saltarsi: una suite che si auto-salta in
+    /// silenzio resta verde senza aver verificato niente, e questi sono i test
+    /// che presidiano la conformita' fra i tre linguaggi. Qui era cosi' fin
+    /// dall'inizio, anche perche' xunit 2.x non ha uno skip dinamico senza
+    /// pacchetti in piu'; Python e Go saltavano e sono stati allineati a questa
+    /// politica in D107. In CI le immagini ci sono sempre, perche'
     /// sync-images.sh gira prima del build.
     /// </summary>
     private static string RequireImage()

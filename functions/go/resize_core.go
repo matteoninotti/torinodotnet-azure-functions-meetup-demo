@@ -41,7 +41,7 @@ const (
 	// (width=800, count=80 — D89), non sul massimo tecnicamente
 	// rappresentabile: su un endpoint anonimo il caso peggiore lo paga il
 	// free grant. I conti che portano a questi due numeri stanno nel decision
-	// log (D100).
+	// log (D100; il tetto di count e' stato rialzato da 200 a 500 in D104).
 	//
 	// Gli stessi due numeri valgono identici in Python e .NET, e il frontend
 	// non offre nulla oltre questi: un tetto diverso fra i tre worker sarebbe
@@ -49,7 +49,7 @@ const (
 	minWidth = 1
 	maxWidth = 4000
 	minCount = 1
-	maxCount = 200
+	maxCount = 500
 )
 
 // --- Errori -----------------------------------------------------------------

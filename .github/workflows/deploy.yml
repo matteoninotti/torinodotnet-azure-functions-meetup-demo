@@ -44,6 +44,16 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Il vincolo "solo da main" vive QUI e non solo nello step sotto. Un
+    # workflow_dispatch esegue il workflow del ref scelto ([events that trigger
+    # workflows](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows):
+    # "each workflow run will use the version of the workflow that is present in
+    # the associated commit SHA or Git ref of the event"), quindi un guard
+    # scritto nel file non esiste sui branch che non lo contengono — cioe'
+    # proprio quelli da fermare. La deployment branch policy dell'environment e'
+    # configurazione del repository: il contenuto del ref non la tocca, e
+    # GitHub la applica prima che il job parta.
+    environment: production
     steps:
       # Il vincolo esiste gia' di fatto — la credenziale federata OIDC e'
       # registrata sul solo subject `refs/heads/main`, quindi da un branch di
@@ -94,8 +104,10 @@ jobs:
       # dell'encoder — non arriva in produzione. Python era l'unico dei tre a
       # deployarsi senza, ed e' il linguaggio da cui i casi condivisi sono nati.
       # Sta DOPO sync-images.sh di proposito: senza le immagini i test della
-      # pipeline si auto-saltano e la suite resterebbe verde senza averli
-      # eseguiti.
+      # pipeline falliscono (D107), e fallirebbero per un motivo che non e' il
+      # codice. Prima di D107 si auto-saltavano, e allora l'ordine serviva a
+      # evitare una suite verde che non aveva verificato niente: il motivo e'
+      # cambiato, l'ordine no.
       - name: Installa Python
         if: inputs.language == 'python'
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0

@@ -16,6 +16,7 @@ import (
 	"image/jpeg"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 )
 
@@ -165,26 +166,32 @@ func TestParseParamsUnknownImageIsNotFound(t *testing.T) {
 	}
 }
 
-// requireImage restituisce la prima immagine disponibile, o salta il test.
+// requireImage restituisce la prima immagine disponibile, o FALLISCE il test
+// dicendo cosa lanciare.
 //
-// A differenza di .NET qui lo skip esiste ed e' idiomatico (t.Skip), quindi si
-// usa: e' anche il comportamento dei test Python.
+// Non e' uno `t.Skip`, che pure sarebbe idiomatico in Go: una suite che si
+// auto-salta resta verde senza aver verificato niente, e i test che dipendono
+// dalle immagini sono quelli che presidiano la conformita' fra i tre
+// linguaggi — geometria dell'output, parametri dell'encoder, tetti dei
+// parametri. Un cancello che passa da solo quando manca un file non e' un
+// cancello (D107). Stessa politica di .NET; in CI le immagini ci sono sempre,
+// perche' sync-images.sh gira prima dei test.
 func requireImage(t *testing.T) string {
 	t.Helper()
 	names := availableImages()
 	if len(names) == 0 {
-		t.Skip("nessuna immagine di test in functions/go/images/: lanciare ./scripts/sync-images.sh go")
+		t.Fatal("nessuna immagine di test in functions/go/images/: lanciare ./scripts/sync-images.sh go")
 	}
 	return names[0]
 }
 
 // requireNamedImage restituisce i byte di un'immagine PRECISA, per i test che
-// hanno bisogno di dimensioni note, o salta il test.
+// hanno bisogno di dimensioni note, o FALLISCE il test come requireImage.
 func requireNamedImage(t *testing.T, name string) []byte {
 	t.Helper()
 	payload, ok := sourceBytes(name)
 	if !ok {
-		t.Skipf("%s non e' in functions/go/images/: lanciare ./scripts/sync-images.sh go", name)
+		t.Fatalf("%s non e' in functions/go/images/: lanciare ./scripts/sync-images.sh go", name)
 	}
 	return payload
 }
@@ -204,6 +211,31 @@ func TestParseParamsRejectsOutOfRange(t *testing.T) {
 		if _, ok := err.(*invalidParameterError); !ok {
 			t.Errorf("%s=%s: atteso invalidParameterError, ottenuto %T (%v)", c.field, c.value, err, err)
 		}
+	}
+}
+
+// Il tetto di `count` arriva davvero fino al punto d'ingresso.
+//
+// I casi condivisi esercitano parseInt passandogli i limiti PRESI DAL FILE
+// (spec.Min, spec.Max), quindi verificano che file e codice dichiarino lo stesso
+// numero — non che quel numero sia poi quello che l'endpoint applica.
+// Dimostrato in Python: cablando il tetto sbagliato dentro parse_params l'intera
+// suite restava verde (D104). Qui si chiama parseParams e non parseInt, e si usa
+// maxCount e non spec.Max.
+func TestParseParamsAppliesTheCountCeiling(t *testing.T) {
+	image := requireImage(t)
+
+	p, err := parseParams(query(map[string]string{"image": image, "count": strconv.Itoa(maxCount)}))
+	if err != nil {
+		t.Fatalf("count=%d: atteso accettato, ottenuto %v", maxCount, err)
+	}
+	if p.Count != maxCount {
+		t.Errorf("count=%d: atteso %d, ottenuto %d", maxCount, maxCount, p.Count)
+	}
+
+	_, err = parseParams(query(map[string]string{"image": image, "count": strconv.Itoa(maxCount + 1)}))
+	if _, ok := err.(*invalidParameterError); !ok {
+		t.Errorf("count=%d: atteso invalidParameterError, ottenuto %T (%v)", maxCount+1, err, err)
 	}
 }
 
@@ -424,6 +456,10 @@ func TestImageCatalogIsConsistentWithAvailableImages(t *testing.T) {
 	// I nomi del catalogo devono essere esattamente quelli accettati da
 	// ?image=: se divergessero, il selettore della SWA offrirebbe scelte che
 	// l'endpoint di resize rifiuta con 404.
+	//
+	// requireImage non serve per prendere un nome, ma perche' senza immagini i
+	// due elenchi sono entrambi vuoti e il confronto sotto passa a vuoto (D107).
+	requireImage(t)
 	names := availableImages()
 	catalog := imageCatalog()
 	if len(names) != len(catalog) {
@@ -475,7 +511,7 @@ func TestSourceBytesUnknownImage(t *testing.T) {
 
 // TestMain carica le immagini una volta per l'intero pacchetto di test, come fa
 // main() in app init. Senza, il catalogo resterebbe vuoto e ogni test che
-// dipende dalle immagini si salterebbe anche con la sincronizzazione fatta.
+// dipende dalle immagini fallirebbe anche con la sincronizzazione fatta.
 func TestMain(m *testing.M) {
 	loadImages()
 	os.Exit(m.Run())

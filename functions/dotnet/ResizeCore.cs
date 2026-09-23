@@ -36,7 +36,7 @@ public static class ResizeCore
     // (width=800, count=80 — D89), non sul massimo tecnicamente
     // rappresentabile: su un endpoint anonimo il caso peggiore lo paga il free
     // grant. I conti che portano a questi due numeri stanno nel decision log
-    // (D100).
+    // (D100; il tetto di count e' stato rialzato da 200 a 500 in D104).
     //
     // Gli stessi due numeri valgono identici in Python e Go, e il frontend non
     // offre nulla oltre questi: un tetto diverso fra i tre worker sarebbe
@@ -44,7 +44,7 @@ public static class ResizeCore
     public const int MinWidth = 1;
     public const int MaxWidth = 4_000;
     public const int MinCount = 1;
-    public const int MaxCount = 200;
+    public const int MaxCount = 500;
 
     private static readonly string[] ImageSuffixes = [".jpg", ".jpeg"];
 
@@ -152,8 +152,9 @@ public static class ResizeCore
     ///
     /// <para>Pubblico come TargetHeight, e per lo stesso motivo: i casi attesi
     /// stanno in shared/conformance/param_cases.json e il test li esercita su
-    /// questo metodo, non attraverso ParseParams — che richiederebbe le immagini
-    /// e si salterebbe dove non ci sono.</para>
+    /// questo metodo, non attraverso ParseParams — che richiederebbe le immagini.
+    /// Che il tetto arrivi davvero fino a ParseParams lo verifica un test a
+    /// parte, ParseParamsAppliesTheCountCeiling (D105).</para>
     ///
     /// <para><c>NumberStyles.None</c> e cultura invariante non sono zelo: sono il
     /// pezzo che rende il contratto lo stesso nei tre worker. Il

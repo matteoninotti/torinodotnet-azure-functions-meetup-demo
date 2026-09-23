@@ -16,7 +16,8 @@
 // quante ne siano davvero state servite.
 //
 // ⚠️ IL RISULTATO HA DUE RIGHE PER LINGUAGGIO, e vanno lette separate.
-// `phase` distingue la PRIMA richiesta servita da ciascuna istanza da tutte le
+// `phase` distingue la PRIMA richiesta servita da ciascuna istanza — a partire
+// da `win_start - look_back`, non da `win_start` — da tutte le
 // successive. La separazione non e' un raffinamento: D50 ha ritrattato un
 // numero proprio perche' era stato calcolato senza di essa. L'overhead
 // host<->worker vale ~180-200 ms sulla prima richiesta di un'istanza e ~7 ms
@@ -27,6 +28,22 @@
 
 let win_start = datetime(2026-09-10T16:03:50Z);
 let win_end   = datetime(2026-09-10T16:04:20Z);
+// Quanto si guarda INDIETRO rispetto a win_start per stabilire se un'istanza
+// era gia' in servizio. Deve superare il tempo di scale-to-zero (~3-4 minuti,
+// D56): sotto quella soglia un'istanza sopravvissuta al run precedente non
+// verrebbe vista, e tornerebbe il difetto che questa riga esiste per chiudere.
+// Non allarga la finestra di misura — serve solo a classificare le righe che
+// stanno gia' dentro win_start..win_end.
+let look_back = 30m;
+// La prima richiesta servita da ciascuna istanza IN ASSOLUTO, non la prima che
+// capita dentro la finestra. La differenza morde quando un run e' preceduto da
+// poco da un altro sulla stessa app — che e' la regola, non l'eccezione: D90
+// punto 1 IMPONE un run di riscaldamento identico subito prima della Metrica 1.
+// Un'istanza gia' calda classificata come cold start gonfia la riga "1-prima" e
+// toglie proprio le richieste a regime dalla riga da cui escono i numeri.
+let first_seen = AppRequests
+| where TimeGenerated between (win_start - look_back .. win_end) and Name == 'resize'
+| summarize first_on_instance = min(TimeGenerated) by AppRoleInstance;
 let metrics = AppTraces
 | where TimeGenerated between (win_start .. win_end)
 | where Message startswith 'RESIZE_METRICS'
@@ -54,14 +71,19 @@ AppRequests
 // realmente servita, e su un run dove le istanze nascono di continuo restituiva
 // il valore che D50 ha ritrattato (182,74 ms sulla finestra qui sopra).
 | extend overhead_ms = DurationMs - total_ms
-// Partizione per istanza: ordinando per istanza e poi per tempo, la riga in cui
-// l'istanza cambia e' la prima richiesta servita da quell'istanza. Serve un
-// flusso serializzato, che e' cio' che `sort by` produce.
 // Non serve partizionare anche per linguaggio: un AppRoleInstance appartiene a
-// una sola function app, quindi a un solo linguaggio.
-| sort by AppRoleInstance asc, TimeGenerated asc
-| extend rank_on_instance = row_number(1, prev(AppRoleInstance) != AppRoleInstance)
-| extend phase = iff(rank_on_instance == 1, '1-prima sull istanza', '2-successive')
+// una sola function app, quindi a un solo linguaggio (verificato: su 747
+// istanze in 30 giorni, nessuna ne tocca piu' di una).
+//
+// Questa join sostituisce un `sort by AppRoleInstance, TimeGenerated` seguito da
+// `row_number(1, prev(AppRoleInstance) != AppRoleInstance)`, che partizionava
+// correttamente ma solo DENTRO la finestra, e classificava quindi come cold
+// start ogni istanza gia' calda all'inizio del run. Sul ladder Go del
+// 2026-09-13 la differenza era di 4 istanze su 190. Toglie anche la
+// serializzazione dell'intero flusso, che su un run da 1.500 righe e' la parte
+// piu' cara della query.
+| join kind=leftouter first_seen on AppRoleInstance
+| extend phase = iff(TimeGenerated == first_on_instance, '1-prima sull istanza', '2-successive')
 | summarize
     requests      = count(),
     ok            = countif(ResultCode == '200'),
