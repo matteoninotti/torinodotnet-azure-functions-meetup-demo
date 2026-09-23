@@ -9,7 +9,9 @@
 # di un run di misura invalida la misura (D44). L'alternativa via Actions
 # richiederebbe di mettere in GitHub il deployment token della SWA, che e' una
 # credenziale di lunga durata: qui il token si legge da Azure al momento e non
-# viene scritto da nessuna parte.
+# viene scritto da nessuna parte. Arriva alla SWA CLI nell'ambiente del
+# processo e non come argomento: gli argomenti di un processo li vede chiunque
+# guardi la tabella dei processi, l'ambiente solo lo stesso utente.
 #
 # Il frontend non fa parte del percorso misurato, quindi un deploy manuale non
 # costa niente al metodo.
@@ -31,11 +33,19 @@ command -v npx >/dev/null || { echo "manca npx (Node)" >&2; exit 1; }
 # rispondendo 404, e lo farebbe senza che questo script fallisca.
 [ -f "$CONTENT_DIR/index.html" ] || { echo "manca $CONTENT_DIR/index.html" >&2; exit 1; }
 
-APP_NAME="$(az staticwebapp list \
+# Esattamente una: con piu' di una, prenderne "la prima" vorrebbe dire
+# pubblicare su una scelta dall'ordine di risposta dell'API.
+APP_NAMES="$(az staticwebapp list \
   --resource-group "$RESOURCE_GROUP" \
-  --query "[0].name" -o tsv)"
+  --query "[].name" -o tsv)"
 
-[ -n "$APP_NAME" ] || { echo "nessuna Static Web App in $RESOURCE_GROUP: manca il deploy del Bicep?" >&2; exit 1; }
+[ -n "$APP_NAMES" ] || { echo "nessuna Static Web App in $RESOURCE_GROUP: manca il deploy del Bicep?" >&2; exit 1; }
+[ "$(printf '%s\n' "$APP_NAMES" | wc -l | tr -d ' ')" -eq 1 ] || {
+  echo "piu' di una Static Web App in $RESOURCE_GROUP, non scelgo io quale:" >&2
+  printf '%s\n' "$APP_NAMES" >&2
+  exit 1
+}
+APP_NAME="$APP_NAMES"
 
 echo "Static Web App: $APP_NAME (gruppo $RESOURCE_GROUP)"
 
@@ -48,8 +58,13 @@ TOKEN="$(az staticwebapp secrets list \
 
 # --env production: senza, il contenuto finisce in un ambiente di preview con
 # un hostname diverso, che il CORS dei worker non ammette.
-npx --yes @azure/static-web-apps-cli deploy "$CONTENT_DIR" \
-  --deployment-token "$TOKEN" \
+#
+# Versione esatta, letta con `npm view @azure/static-web-apps-cli version` il
+# 2026-09-24: senza, npx scarica quella che npm considera l'ultima al momento
+# della pubblicazione. SWA_CLI_DEPLOYMENT_TOKEN e' la variabile che la CLI legge
+# quando manca --deployment-token (documentazione di `swa deploy`, e
+# dist/cli/commands/deploy/deploy.js nella 2.0.10).
+SWA_CLI_DEPLOYMENT_TOKEN="$TOKEN" npx --yes @azure/static-web-apps-cli@2.0.10 deploy "$CONTENT_DIR" \
   --env production
 
 HOSTNAME="$(az staticwebapp show \
