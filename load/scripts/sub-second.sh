@@ -7,15 +7,19 @@
 #   ./load/scripts/sub-second.sh report <serie>   # la lettura, >= 6 min dopo
 #
 # Per ciascun linguaggio, uno alla volta: una richiesta di riscaldamento e
-# poi 20 in sequenza, count=1. Con concorrenza 1 e richieste in sequenza le
-# 20 finiscono sulla stessa istanza calda.
+# poi 20 in sequenza, count=1. Le 20 NON finiscono su un'istanza sola: con il
+# tetto a 5 la prima richiesta a freddo accende 5 host insieme e le successive
+# ruotano su quelli (D131).
 #
-# Il controllo che decide e' un INTERVALLO, non un'uguaglianza: il
-# riscaldamento finisce negli stessi minuti della metrica delle 20 (D60), con
-# il suo eventuale cold start dentro se il cold start e' fatturato. Quindi
+# Il controllo che decide e' un INTERVALLO, non un'uguaglianza: riscaldamento
+# e cold start finiscono negli stessi minuti della metrica delle 20 (D60).
+# Quindi
 #
-#   20 x 1.000 ms x 2.048 MB  <=  unita' totali  <=  quello + le unita' del
-#   riscaldamento, al piu' 2.048 x ceil100(max(1.000, tempo client netto))
+#   20 x 1.000 ms x 2.048 MB  <=  unita' totali  <=  somma su OGNI richiesta
+#   di 2.048 x ceil100(max(1.000, tempo client netto))
+#
+# e il minuto prima della prima richiesta deve essere a zero, altrimenti la
+# coda di un run precedente sulla stessa app entrerebbe nella somma.
 #
 # Se fossero fatturate alla durata reale, il totale starebbe molto sotto il
 # limite inferiore. Il rapporto Units/Count al minuto e' un controllo in piu',
@@ -27,9 +31,12 @@ set -euo pipefail
 MODE="${1:-}"
 SERIES="${2:-}"
 [[ "$MODE" =~ ^(run|report)$ ]] && [[ "$SERIES" =~ ^[A-Za-z0-9._-]+$ ]] \
-  || { echo "uso: $0 <run|report> <serie>" >&2; exit 2; }
-
+  || { echo "uso: $0 <run|report> <serie> [linguaggio...]" >&2; exit 2; }
+shift 2
 LANGS=(python dotnet go)
+# Il report si puo' limitare ad alcuni linguaggi, per esempio quando uno dei
+# tre si e' interrotto a meta'.
+[ "$MODE" = report ] && [ "$#" -gt 0 ] && LANGS=("$@")
 N_WARM=20
 COUNT=1
 IMAGE=npm-install-7-years.jpg
@@ -75,7 +82,7 @@ for lang in "${LANGS[@]}"; do
   first=$(awk -F'\t' -v l="$lang" '$1==l{print $4}' "$TSV" | sort | head -n 1)
   last=$(awk -F'\t' -v l="$lang" '$1==l{print $5}' "$TSV" | sort | tail -n 1)
   "$SCRIPT_DIR/export-run.sh" "$label" "$first" "$last" $((N_WARM + 1)) || failed=1
-  start=$(python3 -c "import sys;print(sys.argv[1][:16]+':00Z')" "$first")
+  start=$(python3 -c "import sys,datetime as d;t=d.datetime.strptime(sys.argv[1][:16],'%Y-%m-%dT%H:%M');print((t-d.timedelta(minutes=1)).strftime('%Y-%m-%dT%H:%M:00Z'))" "$first")
   end=$(python3 -c "import sys,datetime as d;t=d.datetime.strptime(sys.argv[1][:16],'%Y-%m-%dT%H:%M');print((t+d.timedelta(minutes=6)).strftime('%Y-%m-%dT%H:%M:00Z'))" "$last")
   app_id=$(az functionapp show -g "$RESOURCE_GROUP" -n "torinodotnet-${lang}" --query id -o tsv 2>"$AZ_ERR") \
     || { echo "app ${lang} non trovata: $(cat "$AZ_ERR")" >&2; exit 1; }
@@ -85,31 +92,45 @@ for lang in "${LANGS[@]}"; do
 done
 [ "$failed" -eq 0 ] || { echo "REPORT INTERROTTO: almeno una finestra non e' pulita." >&2; exit 1; }
 
-python3 - "$REPO_ROOT" "$SERIES" "$TSV" "$OUT_DIR" "$N_WARM" <<'EOF'
+python3 - "$REPO_ROOT" "$SERIES" "$TSV" "$OUT_DIR" "$N_WARM" "${LANGS[@]}" <<'EOF'
 import json, math, sys
 repo, series, tsv, out_dir, n_warm = sys.argv[1:6]
+langs = sys.argv[6:]
 n_warm = int(n_warm)
 lines = open(tsv).read().splitlines()
 hdr = lines[0].split("\t")
 rows = [dict(zip(hdr, l.split("\t"))) for l in lines[1:]]
 PER = 2048 * 1000
 bad = False
-for lang in ("python", "dotnet", "go"):
+for lang in langs:
     req = json.load(open(f"{repo}/load/output/{series}-{lang}/requests.json"))
     resize = sorted((x for x in req if x["Name"] == "resize"), key=lambda x: x["TimeGenerated"])
     durs = [float(x["DurationMs"]) for x in resize]
-    warm = [r for r in rows if r["language"] == lang and r["kind"] == "riscaldamento"][0]
-    warm_net = (float(warm["time_total"]) - float(warm["time_appconnect"])) * 1000
+    mine = [r for r in rows if r["language"] == lang]
+    nets = [(float(r["time_total"]) - float(r["time_appconnect"])) * 1000 for r in mine]
     m = {v["name"]["value"]: v["timeseries"][0]["data"] if v["timeseries"] else []
          for v in json.load(open(f"{out_dir}/metrics-{lang}.json"))["value"]}
+    # Il primo minuto letto e' quello PRIMA della prima richiesta: deve essere
+    # a zero, e poi si toglie dalla somma.
+    before = m["OnDemandFunctionExecutionUnits"][0].get("total") or 0
+    m = {k: v[1:] for k, v in m.items()}
     units = [p.get("total") or 0 for p in m["OnDemandFunctionExecutionUnits"]]
     counts = [p.get("total") or 0 for p in m["OnDemandFunctionExecutionCount"]]
     total_units, total_count = sum(units), sum(counts)
+    # Limite inferiore: le 20 calde fatturate almeno al minimo (il
+    # riscaldamento si esclude, per prudenza). Limite superiore: OGNI
+    # richiesta fatturata al piu' per il suo tempo client netto, cold start e
+    # attese comprese, arrotondato come da billing. Le 20 "calde" non stanno su
+    # un'istanza sola: con il tetto a 5 una richiesta a freddo accende 5 host
+    # insieme e le successive ruotano su quelli (D131), quindi piu' di una
+    # porta un cold start.
     lo = n_warm * PER
-    hi = lo + 2048 * math.ceil(max(1000, warm_net) / 100) * 100
+    hi = sum(2048 * math.ceil(max(1000, n) / 100) * 100 for n in nets)
     at_real = 2048 * sum(math.ceil(d / 100) * 100 for d in durs[1:])
     closed = len(units) >= 2 and units[-1] == 0 and units[-2] == 0
-    ok = lo <= total_units <= hi and closed
+    ok = lo <= total_units <= hi and closed and before == 0
+    if before:
+        print(f"{lang:7} ERRORE: {before:,.0f} MB-ms nel minuto prima della finestra: coda di un run precedente")
     bad |= not ok
     d_hot = sorted(durs[1:])
     print(f"{lang:7} durata server calda: mediana {d_hot[len(d_hot)//2]:.1f} ms, max {max(d_hot):.1f}")
