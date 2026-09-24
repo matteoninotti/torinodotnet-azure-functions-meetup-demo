@@ -53,6 +53,22 @@ while IFS=$'\t' read -r label lang round t_send t_recv _; do
 done < <(tail -n +2 "$TSV")
 [ "$failed" -eq 0 ] || { echo "REPORT INTERROTTO: almeno una finestra non e' pulita." >&2; exit 1; }
 
+# Avvio dell'host di ogni istanza che ha servito una richiesta della serie.
+# Una ripetizione vale come cold start solo se il suo host e' partito CON la
+# richiesta: Python avvia a volte host senza nessuna richiesta (D132), e una
+# richiesta finita su uno di quelli misurerebbe un cold start che non c'e'
+# stato.
+first_send=$(tail -n +2 "$TSV" | cut -f4 | sort | head -n 1)
+last_recv=$(tail -n +2 "$TSV" | cut -f5 | sort | tail -n 1)
+WS=$(az monitor log-analytics workspace show -g "$RESOURCE_GROUP" -n torinodotnet-logs --query customerId -o tsv 2>"$AZ_ERR") \
+  || { echo "workspace non trovato: $(cat "$AZ_ERR")" >&2; exit 1; }
+az monitor log-analytics query --workspace "$WS" -o json --analytics-query "
+  AppTraces
+  | where TimeGenerated between (datetime(${first_send}) - 30m .. datetime(${last_recv}))
+  | where Message startswith 'Initializing Warmup Extension'
+  | summarize host_start = min(TimeGenerated) by AppRoleInstance" >"$OUT_DIR/host-starts.json" 2>"$AZ_ERR" \
+  || { echo "avvii degli host non leggibili: $(cat "$AZ_ERR")" >&2; exit 1; }
+
 # Unita' fatturate di Python, al minuto, su tutta la serie piu' 10 minuti.
 if tail -n +2 "$TSV" | cut -f2 | grep -qx python; then
   first=$(tail -n +2 "$TSV" | awk -F'\t' '$2=="python"{print $4}' | sort | head -n 1)
@@ -66,10 +82,13 @@ if tail -n +2 "$TSV" | cut -f2 | grep -qx python; then
     || { echo "metriche non leggibili: $(cat "$AZ_ERR")" >&2; exit 1; }
 fi
 
-python3 - "$REPO_ROOT" "$TSV" "$UNITS" "$OUT_DIR/report.tsv" <<'EOF'
+python3 - "$REPO_ROOT" "$TSV" "$UNITS" "$OUT_DIR/report.tsv" "$OUT_DIR/host-starts.json" <<'EOF'
 import datetime as dt, json, math, os, sys
 
-repo, tsv, units_path, report_path = sys.argv[1:5]
+repo, tsv, units_path, report_path, starts_path = sys.argv[1:6]
+host_start = {x["AppRoleInstance"]: x["host_start"] for x in json.load(open(starts_path))}
+# Oltre questo anticipo l'host esisteva gia' quando e' arrivata la richiesta.
+PREEXISTING_S = 5.0
 rows = [dict(zip(open(tsv).readline().rstrip("\n").split("\t"), l.rstrip("\n").split("\t")))
         for l in open(tsv).readlines()[1:]]
 
@@ -94,12 +113,17 @@ for r in rows:
     resize = [x for x in req if x["Name"] == "resize"]
     assert len(resize) == 1, r["label"]
     D = float(resize[0]["DurationMs"])
+    inst = resize[0]["AppRoleInstance"]
+    hs = host_start.get(inst)
+    host_lead_s = (ts(resize[0]["TimeGenerated"]) - ts(hs)).total_seconds() if hs else None
+    cold = host_lead_s is not None and host_lead_s <= PREEXISTING_S
     net = (float(r["time_total"]) - float(r["time_appconnect"])) * 1000
     total = float(r["time_total"]) * 1000
     rec = dict(label=r["label"], language=r["language"], round=r["round"], t_send=r["t_send"],
                result=resize[0]["ResultCode"], instance=resize[0]["AppRoleInstance"],
                client_total_ms=round(total, 1), client_net_ms=round(net, 1), server_ms=round(D, 1),
                cold_est_ms=round(net - D, 1), pipeline_ms=r["total_ms"],
+               host_lead_s=host_lead_s, cold_start=cold,
                units_mbms="", billed_ms="", h0_ms="", h1_ms="", units_window="")
     if r["language"] == "python" and units:
         t0 = ts(r["t_send"]).replace(second=0)
@@ -131,11 +155,17 @@ def nearest_rank(xs, p):
 print(f"Report scritto in {report_path}")
 print("Percentili a rango piu' vicino: con 10 campioni il p95 e' il massimo.")
 for lang in ("python", "dotnet", "go"):
-    rs = [x for x in out if x["language"] == lang]
+    all_rs = [x for x in out if x["language"] == lang]
+    if not all_rs:
+        continue
+    warm = [x["label"] for x in all_rs if not x["cold_start"]]
+    rs = [x for x in all_rs if x["cold_start"]]
+    ok = sum(1 for x in rs if x["result"] == "200")
+    print(f"{lang:7} n={len(rs)} ok={ok}" + (f"  ESCLUSE (host gia' avviato o sconosciuto): {', '.join(warm)}" if warm else ""))
+    if warm:
+        bad = True
     if not rs:
         continue
-    ok = sum(1 for x in rs if x["result"] == "200")
-    print(f"{lang:7} n={len(rs)} ok={ok}")
     for k in ("cold_est_ms", "client_net_ms", "server_ms"):
         xs = [x[k] for x in rs]
         print(f"   {k:14} mediana {nearest_rank(xs, 50):8.1f}  p95 {nearest_rank(xs, 95):8.1f}  min {min(xs):8.1f}")
@@ -143,6 +173,6 @@ for lang in ("python", "dotnet", "go"):
         for x in rs:
             print(f"   M4 {x['label']:22} fatturati {x['billed_ms']:>8} ms  | H0 {x['h0_ms']:>5}  H1 {x['h1_ms']:>5}  D {x['server_ms']:>7}  [{x['units_window']}]")
 if bad:
-    print("ERRORE: almeno una somma delle unita' non si e' chiusa (coda non tornata a zero nella finestra).", file=sys.stderr)
+    print("ERRORE: almeno una ripetizione esclusa (host gia' avviato) o una somma delle unita' non chiusa.", file=sys.stderr)
     sys.exit(1)
 EOF
