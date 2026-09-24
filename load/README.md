@@ -23,9 +23,10 @@ Se il job ACA servirà, due impostazioni non sono opzionali:
 | `scripts/resize.js` | Il generatore di carico per Metrica 1 e Metrica 3. |
 | `scripts/wait-for-zero.sh` | Attende e **verifica** lo zero istanze su un'app. |
 | `scripts/preflight.sh` | I controlli prima di ogni run: configurazione di scala e zero istanze su tutte e tre le app. |
+| `scripts/postflight.sh` | Fine campagna: riporta il tetto di istanze a 5 e lo verifica; con `--check` verifica soltanto. |
 | `scripts/export-run.sh` | Dopo ogni run: esporta le righe grezze della finestra e verifica che contenga esattamente le richieste del run. |
 | `scripts/runtime-snapshot.sh` | Inizio e fine campagna: registra e confronta il runtime dichiarato dai tre worker. |
-| `results/` | Solo i run che finiscono nelle slide, committati esplicitamente. Il resto va in `output/`, che è gitignorato. |
+| `results/` | Solo i run che finiscono nelle slide, committati esplicitamente. Il resto va in `output/`, che è gitignorato. **Mai le righe grezze di `export-run.sh`**: contengono dati sul client (per esempio `ClientCity`), e il repo è pubblico. In `results/` vanno i riepiloghi. |
 
 **Uno script per due metriche, non uno per metrica.** Metrica 1 e Metrica 3 usano la stessa forma di carico — tasso costante — e differiscono per lo stato dell'app quando il carico arriva (calda contro zero istanze) e per come si leggono i risultati, non per cosa fa il generatore. Due file identici da tenere allineati a mano sarebbero due occasioni di farli divergere.
 
@@ -70,7 +71,7 @@ Lo script conta anche gli status code uno per uno (`resize_status_codes`), perch
 
 ## Protocollo di ogni run
 
-Fuori dalle finestre di misura le tre app hanno `maximumInstanceCount` a **5**, non ai 200 del Bicep: limita il consumo di traffico non nostro sugli endpoint anonimi. Per le Metriche 1 e 3 va riportato a 200 prima e riabbassato dopo; le Metriche 2 e 4 sono richieste singole e il tetto non le tocca. `preflight.sh` non lascia partire un run di carico con il tetto sbagliato — ed è il motivo per cui il tetto basso si può tenere senza rischiare la misura.
+Fuori dalle finestre di misura le tre app hanno `maximumInstanceCount` a **5**, non ai 200 del Bicep: limita il consumo di traffico non nostro sugli endpoint anonimi. Per le Metriche 1 e 3 va riportato a 200 prima e riabbassato dopo; le Metriche 2 e 4 sono richieste singole e il tetto non le tocca. `preflight.sh` non lascia partire un run di carico con il tetto sbagliato; `postflight.sh` riporta il tetto a 5 a fine campagna e fallisce se non ci è riuscito. Un `az deployment group create` riporta il tetto a 200 senza dirlo: dopo un deploy dell'infrastruttura va rilanciato `postflight.sh`.
 
 **Inizio campagna**
 
@@ -84,7 +85,7 @@ for l in python dotnet go; do az functionapp scale config set -g rg-torinodotnet
 
 **Ogni run**
 
-1. `./load/scripts/preflight.sh <metrica>` — configurazione (2.048 MB, concorrenza 1, tetto a 200 per 1 e 3) e zero istanze su **tutte e tre** le app, non solo su quella da misurare: la quota regionale di core è condivisa fra le app Flex della sottoscrizione ([Regional subscription memory quotas](https://learn.microsoft.com/en-us/azure/azure-functions/flex-consumption-plan#regional-subscription-memory-quotas)). Fra `preflight.sh` e il run, nessuna richiesta verso le app.
+1. `./load/scripts/preflight.sh <metrica> <linguaggio>` — configurazione (2.048 MB, concorrenza 1, tetto a 200 per 1 e 3) e zero istanze su **tutte e tre** le app, non solo su quella da misurare: la quota regionale di core è condivisa fra le app Flex della sottoscrizione ([Regional subscription memory quotas](https://learn.microsoft.com/en-us/azure/azure-functions/flex-consumption-plan#regional-subscription-memory-quotas)). L'app da misurare è confermata **per ultima**, così la sua conferma è la più recente quando il run parte. Fra `preflight.sh` e il run, nessuna richiesta verso le app.
 2. Il run. Per la Metrica 1 sono due, riscaldamento e run misurato, uno dopo l'altro e senza `preflight.sh` in mezzo: l'app deve arrivare calda al secondo (D90).
 3. Dopo 2–4 minuti di ingestion: `./load/scripts/export-run.sh <etichetta> <RUN_START> <RUN_END> <richieste>`, con `<richieste>` = `http_reqs` di k6 per le Metriche 1 e 3, `1` per le Metriche 2 e 4. Salva le righe grezze in `load/output/<etichetta>/` — la telemetria sul workspace dura 30 giorni — e fallisce se nella finestra, su tutte e tre le app, c'è anche una sola richiesta in più, in meno o diversa da `resize`. Per le Metriche 2 e 4 è il controllo "nessun altro traffico": gli endpoint sono anonimi e `ClientIP` è mascherato, quindi non si può sapere *chi* ha fatto una richiesta estranea, ma si può sapere *se* c'è stata.
 4. Solo per la Metrica 3: il conteggio istanze delle **altre due** app nella finestra, con `Count` e mai `Maximum` (D55), letto qualche minuto dopo perché la metrica ritarda (D56):
@@ -97,7 +98,7 @@ for l in python dotnet go; do az functionapp scale config set -g rg-torinodotnet
 
 ```bash
 ./load/scripts/runtime-snapshot.sh fine inizio   # fallisce se una patch di runtime e' cambiata in mezzo
-for l in python dotnet go; do az functionapp scale config set -g rg-torinodotnet-demo -n torinodotnet-$l --maximum-instance-count 5 -o none; done
+./load/scripts/postflight.sh                     # tetto a 5 sulle tre app, riletto dalla risorsa
 ```
 
-Il tetto a 5 è uno scostamento voluto dal Bicep: un `az deployment group create` lo riporta a 200, che è la direzione innocua — toglie la protezione, non falsifica una misura.
+Il tetto a 5 è uno scostamento voluto dal Bicep, che non può nemmeno esprimerlo (`@minValue(40)`). Un `az deployment group create` lo riporta a 200: non falsifica una misura, ma toglie la protezione in silenzio. Per questo, dopo ogni deploy dell'infrastruttura e prima del talk, si lancia `./load/scripts/postflight.sh --check`.
