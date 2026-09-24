@@ -222,7 +222,7 @@ Dalla [tabella Billing](https://learn.microsoft.com/en-us/azure/azure-functions/
 
 ## Metodologia di misurazione
 
-**Premessa che orienta tutte le scelte**: la metrica che conta per i costi è la **durata server-side** della function. Il client serve a *produrre* carico e a dare percentili di esperienza utente, non a stabilire il costo.
+**Premessa che orienta tutte le scelte**: la metrica che conta per i costi è il **tempo di esecuzione della function nel worker**, misurato lato server. Il client serve a *produrre* carico e a dare percentili di esperienza utente, non a stabilire il costo. ⚠️ *Corregge la formulazione precedente*, che indicava la durata server-side di Application Insights (`DurationMs`): le unità fatturate valgono `ceil100` del tempo di esecuzione, **sotto** `DurationMs`. A regime la differenza è di pochi ms (l'overhead host↔worker); sulla prima richiesta di un'istanza arriva a centinaia di ms, e a secondi se l'app ha un init lungo (D135, D136).
 
 ### Generatore di carico — k6, **dal Mac** (deciso in Fase 7, D131)
 
@@ -303,6 +303,8 @@ Tre formulazioni ufficiali convergono ma non chiudono la questione:
 
 **Interpretazione più coerente: il cold start non è fatturato.** Non va scritto in slide come fatto certo senza questa verifica empirica.
 
+✅ **Verificato (D135, D136).** Su 10 richieste Python a freddo il fatturato è 1.500–2.100 ms, cioè `ceil100` del tempo di esecuzione nel worker, contro 2.400–3.900 ms se l'avvio fosse fatturato; sta anche **sotto** `DurationMs`. Il controllo differenziale (5 s di calcolo a vuoto nell'app init, al posto di un import pesante) allunga di 4,9 s l'attesa dell'utente e `DurationMs`, **e non cambia il fatturato** (1.500 ms di mediana in entrambi i casi). Il corollario è verificato per la metà "a livello di modulo non si paga"; che lo stesso lavoro dentro l'handler si paghi discende dal risultato (si paga l'esecuzione), ma non è stato provato con una variante apposta.
+
 **Corollario potenzialmente molto interessante**, se l'interpretazione regge: **dove si mette il codice di inizializzazione cambia se lo si paga**. Import pesanti a livello di modulo → eseguiti durante l'app init → non fatturati. Gli stessi import fatti pigramente dentro l'handler → fatturati a ogni cold start. Vale per tutti e tre i linguaggi.
 
 **Protocollo:**
@@ -330,7 +332,7 @@ Tre formulazioni ufficiali convergono ma non chiudono la questione:
 2. **Spiegazione del GIL** e perché nel modello serverless lo scaling orizzontale lo aggira.
 3. **"isolated worker" è un concetto solo .NET**: su Flex tutti e tre girano out-of-process.
 4. **Perché `?image=` invece del POST con body**: eliminare banda e parsing multipart dalla misura.
-5. **La metrica che determina il costo è la durata server-side**, non la latenza client.
+5. **La metrica che determina il costo è il tempo di esecuzione lato server**, non la latenza client e nemmeno tutta la durata registrata da Application Insights (D136).
 6. **Cold start misurato separatamente**, con mediana e p95 (mai la media).
 7. **Perché il carico è a tasso costante e non a utenti virtuali**: con un modello VU-based il backend più lento riceve meno richieste.
 8. **Il cold start sotto burst è lo scenario reale**, non quello isolato.
