@@ -134,6 +134,19 @@ resource app 'Microsoft.Web/sites@2024-04-01' = {
   }
 }
 
+// Pubblicazione con utente e password sul sito SCM spenta. La pipeline deploya
+// con un token ottenuto via OIDC e non passa di qui ([Disable basic
+// authentication](https://learn.microsoft.com/en-us/azure/app-service/configure-basic-auth-disable)).
+// Dichiarata nel Bicep per lo stesso motivo di D39: una re-provisioning la
+// RI-imposta invece di lasciarla com'era.
+resource scmBasicAuth 'Microsoft.Web/sites/basicPublishingCredentialsPolicies@2024-04-01' = {
+  parent: app
+  name: 'scm'
+  properties: {
+    allow: false
+  }
+}
+
 output appName string = app.name
 output defaultHostName string = app.properties.defaultHostName
 output principalId string = app.identity.principalId
