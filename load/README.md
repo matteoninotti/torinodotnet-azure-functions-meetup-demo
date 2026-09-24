@@ -24,6 +24,7 @@ Se il job ACA servirà, due impostazioni non sono opzionali:
 | `scripts/wait-for-zero.sh` | Attende e **verifica** lo zero istanze su un'app. |
 | `scripts/preflight.sh` | I controlli prima di ogni run: configurazione di scala e zero istanze su tutte e tre le app. |
 | `scripts/postflight.sh` | Fine campagna: riporta il tetto di istanze a 5 e lo verifica; con `--check` verifica soltanto. |
+| `scripts/check-alerts.sh` | Elenca gli alert di Azure Monitor scattati dopo un istante: esce 0 se non ce ne sono, 1 se ce ne sono, 2 se la domanda non ha avuto risposta. |
 | `scripts/export-run.sh` | Dopo ogni run: esporta le righe grezze della finestra e verifica che contenga esattamente le richieste del run. |
 | `scripts/runtime-snapshot.sh` | Inizio e fine campagna: registra e confronta il runtime dichiarato dai tre worker. |
 | `results/` | Solo i run che finiscono nelle slide, committati esplicitamente. Il resto va in `output/`, che è gitignorato. **Mai le righe grezze di `export-run.sh`**: contengono dati sul client (per esempio `ClientCity`), e il repo è pubblico. In `results/` vanno i riepiloghi. |
@@ -100,5 +101,13 @@ for l in python dotnet go; do az functionapp scale config set -g rg-torinodotnet
 ./load/scripts/runtime-snapshot.sh fine inizio   # fallisce se una patch di runtime e' cambiata in mezzo
 ./load/scripts/postflight.sh                     # tetto a 5 sulle tre app, riletto dalla risorsa
 ```
+
+Segnarsi l'istante di fine campagna (UTC). Le regole di consumo scattano durante ogni run di carico, e su questa sottoscrizione le loro mail **non arrivano**: gli alert si controllano interrogandoli. Da quel momento in poi, fra una campagna e l'altra e prima del talk:
+
+```bash
+./load/scripts/check-alerts.sh <fine ultima campagna, es. 2026-09-24T18:00:00Z>
+```
+
+Un alert scattato dopo la fine della campagna è consumo non nostro. Un'uscita 2 non è "nessun alert": la domanda non ha avuto risposta e va rifatta.
 
 Il tetto a 5 è uno scostamento voluto dal Bicep, che non può nemmeno esprimerlo (`@minValue(40)`). Un `az deployment group create` lo riporta a 200: non falsifica una misura, ma toglie la protezione in silenzio. Per questo, dopo ogni deploy dell'infrastruttura e prima del talk, si lancia `./load/scripts/postflight.sh --check`.
