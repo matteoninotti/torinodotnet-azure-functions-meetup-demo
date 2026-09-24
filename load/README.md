@@ -25,6 +25,8 @@ Se il job ACA servirà, due impostazioni non sono opzionali:
 | `scripts/preflight.sh` | I controlli prima di ogni run: configurazione di scala e zero istanze su tutte e tre le app, attese in parallelo, l'app da misurare riconfermata per ultima. |
 | `scripts/run-load.sh` | Un run di Metrica 1 o 3 con i parametri definitivi: salva output e riepilogo di k6, campiona la CPU del generatore, annota `RUN_START`/`RUN_END`/`http_reqs` in `output/runs.tsv`. |
 | `scripts/campaign-load.sh` | La serie di carico: tre ripetizioni di Metrica 3 per linguaggio, con la Metrica 1 subito dopo la prima. |
+| `scripts/load-report.sh` | Lettura della serie di carico run per run: `export-run.sh`, riepilogo, curva al secondo, istanze delle altre app e controllo che nessuna istanza di una Metrica 3 fosse già vista prima della finestra. |
+| `scripts/query-run.sh` | Lancia una query di `queries/` su una finestra data, senza modificare il file. |
 | `scripts/cold-start.sh` | Metrica 2 (e 4 sulle richieste Python): giri ad alternanza di una richiesta a freddo per linguaggio. |
 | `scripts/cold-start-report.sh` | Lettura di una serie di `cold-start.sh`: cold start stimato per richiesta, unità fatturate per le richieste Python. |
 | `scripts/sub-second.sh` | Il run "sotto il secondo": `count=1`, unità fatturate confrontate con il minimo fatturabile. |
