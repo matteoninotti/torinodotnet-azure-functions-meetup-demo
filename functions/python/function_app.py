@@ -17,16 +17,7 @@ import platform
 
 import azure.functions as func
 
-import time
-
 import resize_core
-
-# Variante temporanea: 5 s di calcolo a vuoto nell'app init, al posto di un
-# import pesante a livello di modulo. Si toglie con il revert del commit.
-INIT_BUSY_SECONDS = 5.0
-_init_start = time.perf_counter()
-while time.perf_counter() - _init_start < INIT_BUSY_SECONDS:
-    pass
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
