@@ -133,11 +133,17 @@ for r in rows:
             t_end = min(t_end, nxt[0].replace(second=0) - dt.timedelta(minutes=1))
         minutes = [t0 + dt.timedelta(minutes=i) for i in range(int((t_end - t0).total_seconds() // 60) + 1)]
         vals = [units.get(m, 0.0) for m in minutes]
-        closed = len(vals) >= 4 and vals[-1] == 0 and vals[-2] == 0
         s = sum(vals)
+        # Chiusa vuol dire: la coda e' tornata a zero DENTRO la finestra, la
+        # finestra e' finita da almeno 3 minuti (la metrica ritarda, D60), e la
+        # somma non e' zero. Una somma a zero su una richiesta servita non e' un
+        # dato, e' la metrica che non e' ancora arrivata: letta cosi' dava
+        # "0 ms fatturati" su una richiesta di 2,1 s.
+        settled = dt.datetime.utcnow() - (t_end + dt.timedelta(minutes=1)) >= dt.timedelta(minutes=3)
+        closed = len(vals) >= 4 and vals[-1] == 0 and vals[-2] == 0 and settled and s > 0
         rec.update(units_mbms=int(s), billed_ms=round(s / 2048, 1),
                    h0_ms=ceil100(max(1000, D)), h1_ms=ceil100(max(1000, net)),
-                   units_window=f"{t0:%H:%M}-{t_end:%H:%M}" + ("" if closed else " APERTA"))
+                   units_window=f"{t0:%H:%M}-{t_end:%H:%M}" + ("" if closed else (" IN ATTESA" if not settled else " APERTA")))
         if not closed:
             bad = True
     out.append(rec)
