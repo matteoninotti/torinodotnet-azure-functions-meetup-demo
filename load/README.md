@@ -22,7 +22,12 @@ Se il job ACA servirà, due impostazioni non sono opzionali:
 |---|---|
 | `scripts/resize.js` | Il generatore di carico per Metrica 1 e Metrica 3. |
 | `scripts/wait-for-zero.sh` | Attende e **verifica** lo zero istanze su un'app. |
-| `scripts/preflight.sh` | I controlli prima di ogni run: configurazione di scala e zero istanze su tutte e tre le app. |
+| `scripts/preflight.sh` | I controlli prima di ogni run: configurazione di scala e zero istanze su tutte e tre le app, attese in parallelo, l'app da misurare riconfermata per ultima. |
+| `scripts/run-load.sh` | Un run di Metrica 1 o 3 con i parametri definitivi: salva output e riepilogo di k6, campiona la CPU del generatore, annota `RUN_START`/`RUN_END`/`http_reqs` in `output/runs.tsv`. |
+| `scripts/campaign-load.sh` | La serie di carico: tre ripetizioni di Metrica 3 per linguaggio, con la Metrica 1 subito dopo la prima. |
+| `scripts/cold-start.sh` | Metrica 2 (e 4 sulle richieste Python): giri ad alternanza di una richiesta a freddo per linguaggio. |
+| `scripts/cold-start-report.sh` | Lettura di una serie di `cold-start.sh`: cold start stimato per richiesta, unità fatturate per le richieste Python. |
+| `scripts/sub-second.sh` | Il run "sotto il secondo": `count=1`, unità fatturate confrontate con il minimo fatturabile. |
 | `scripts/postflight.sh` | Fine campagna: riporta il tetto di istanze a 5 e lo verifica; con `--check` verifica soltanto. |
 | `scripts/check-alerts.sh` | Elenca gli alert di Azure Monitor scattati dopo un istante: esce 0 se non ce ne sono, 1 se ce ne sono, 2 se la domanda non ha avuto risposta. |
 | `scripts/export-run.sh` | Dopo ogni run: esporta le righe grezze della finestra e verifica che contenga esattamente le richieste del run. |
@@ -31,7 +36,7 @@ Se il job ACA servirà, due impostazioni non sono opzionali:
 
 **Uno script per due metriche, non uno per metrica.** Metrica 1 e Metrica 3 usano la stessa forma di carico — tasso costante — e differiscono per lo stato dell'app quando il carico arriva (calda contro zero istanze) e per come si leggono i risultati, non per cosa fa il generatore. Due file identici da tenere allineati a mano sarebbero due occasioni di farli divergere.
 
-**Metrica 2 non usa k6.** Il cold start isolato è una singola richiesta sequenziale: un generatore di carico ci aggiungerebbe solo rumore.
+**Metrica 2 non usa k6.** Il cold start isolato è una singola richiesta sequenziale: un generatore di carico ci aggiungerebbe solo rumore. `cold-start.sh` la esegue **a giri** (D126): zero su tutte e tre le app, poi una richiesta per linguaggio in sequenza, con l'ordine ruotato a ogni giro; `count=80` e la stessa immagine dei run di carico. Le richieste Python sono anche le ripetizioni della Metrica 4.
 
 Il comando dei run finali, identico per i tre linguaggi e per Metrica 1 e Metrica 3 (D89, D92):
 
@@ -68,7 +73,7 @@ Lo script conta anche gli status code uno per uno (`resize_status_codes`), perch
 
 `count=N`, RPS target e durata restano parametri esterni, tarati dopo un run preliminare e scritti nel decision log (D15): `count` va dimensionato perché **la più veloce delle tre** superi 1s, e quale sia la più veloce non si sa finché non si misura. **La taratura è stata fatta** con i tre worker deployati (D89): `count=80`, 10 req/s, 60s.
 
-**La Metrica 1 va preceduta da una finestra di riscaldamento che si scarta.** A questo carico la piattaforma impiega decine di secondi ad arrivare alla capacità richiesta, e su una finestra di 60 secondi la rampa domina la misura: senza riscaldamento si misura lo scale-out, che è oggetto della Metrica 3 (D90).
+**La Metrica 1 va preceduta da una finestra di riscaldamento.** A questo carico la piattaforma impiega decine di secondi ad arrivare alla capacità richiesta, e su una finestra di 60 secondi la rampa domina la misura: senza riscaldamento si misura lo scale-out, che è oggetto della Metrica 3 (D90). Il riscaldamento **è una ripetizione della Metrica 3** (D126): stesso comando, stesso stato di partenza, e M1 parte subito dopo il suo `RUN_END`, senza preflight. La finestra di quella ripetizione finisce al suo `RUN_END`; se la ripetizione è invalida, si rifà anche M1. `campaign-load.sh` esegue la serie in quest'ordine.
 
 ## Protocollo di ogni run
 
