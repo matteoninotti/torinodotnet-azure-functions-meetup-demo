@@ -30,6 +30,13 @@ APP_NAME="${APP_NAME:-torinodotnet-${LANGUAGE}}"
 # Un campione ogni 30s per istanza: 210s senza campioni nuovi sono 7 intervalli
 # mancati, abbastanza da escludere un buco isolato di reporting.
 QUIET_SECONDS="${QUIET_SECONDS:-210}"
+# Nessuna conferma prima di aver osservato per almeno questo tempo. La metrica
+# arriva in ritardo di 1,5-2,5 minuti (D90): un'istanza viva quando lo script
+# parte puo' non avere ancora nessun campione visibile, e due letture a 60 s
+# l'una dall'altra non bastano a darle il tempo di comparire. Con 300 s
+# qualunque istanza viva all'avvio ha il tempo di comparire prima che si possa
+# dire zero.
+MIN_OBSERVE_SECONDS="${MIN_OBSERVE_SECONDS:-300}"
 POLL_SECONDS="${POLL_SECONDS:-60}"
 MAX_MINUTES="${MAX_MINUTES:-45}"
 
@@ -56,7 +63,15 @@ if ! APP_ID=$(az functionapp show --resource-group "$RESOURCE_GROUP" \
 fi
 
 START_EPOCH=$(date -u +%s)
-# La finestra parte da un'ora fa: abbastanza da vedere l'ultimo carico.
+# La finestra parte da un'ora fa: abbastanza da vedere l'ultimo carico. E
+# finisce ADESSO, a ogni lettura: `--end-time` va passato esplicito. Con il solo
+# `--start-time` la fine e' "start-time + offset", e l'offset di default e'
+# un'ora (`az monitor metrics list --help`: "If used with --start-time, then the
+# end time will be calculated by adding the offset"). Cioe' la finestra si
+# chiudeva nell'istante in cui lo script partiva, e nessun campione emesso DOPO
+# poteva comparire: verificato il 2026-09-24, un'istanza svegliata alle 13:02:33
+# con campioni alle 13:04-13:06 e lo script che alle 13:07:44 vedeva ancora
+# come ultimo quello delle 12:03, e confermava lo zero.
 WINDOW_START=$(date -u -v-1H +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%SZ)
 
 echo "In attesa dello zero su ${APP_NAME} (finestra da ${WINDOW_START})"
@@ -76,6 +91,7 @@ for _ in $(seq 1 "$MAX_MINUTES"); do
     --interval PT1M \
     --aggregation Count \
     --start-time "$WINDOW_START" \
+    --end-time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     --query "value[0].timeseries[0].data[?count!=null] | [-1].timeStamp" -o tsv 2>"$AZ_ERR"); then
     now=$(date -u +%H:%M:%SZ)
     echo "${now} | comando az fallito, poll scartato (non e' ne' conferma ne' smentita): $(cat "$AZ_ERR")" >&2
@@ -90,8 +106,9 @@ for _ in $(seq 1 "$MAX_MINUTES"); do
     # dallo stesso contatore di conferme dell'altro ramo: una sola lettura,
     # per quanto pulita, resta una sola lettura.
     consecutive_quiet=$((consecutive_quiet + 1))
-    echo "${now} | nessun campione nella finestra (conferma ${consecutive_quiet}/2)"
-    if [ "$consecutive_quiet" -ge 2 ]; then
+    observed=$(( $(date -u +%s) - START_EPOCH ))
+    echo "${now} | nessun campione nella finestra (conferma ${consecutive_quiet}/2, osservati ${observed}s su ${MIN_OBSERVE_SECONDS})"
+    if [ "$consecutive_quiet" -ge 2 ] && [ "$observed" -ge "$MIN_OBSERVE_SECONDS" ]; then
       echo "ZERO CONFERMATO dopo $(( ($(date -u +%s) - START_EPOCH) / 60 )) minuti di attesa"
       exit 0
     fi
@@ -114,7 +131,11 @@ for _ in $(seq 1 "$MAX_MINUTES"); do
     sleep "$POLL_SECONDS"
     continue
   fi
-  age=$(( $(date -u +%s) - last_epoch ))
+  # Il timestamp e' l'INIZIO del minuto in cui cade il campione (PT1M): un
+  # campione emesso alle :59 porta il timestamp di :00. L'eta' si misura dalla
+  # fine del minuto, cioe' dal momento piu' recente in cui l'istanza puo'
+  # essere stata viva, altrimenti la si sovrastima fino a 60 s.
+  age=$(( $(date -u +%s) - last_epoch - 60 ))
 
   echo "${now} | ultimo campione ${last_sample} (${age}s fa)"
 
@@ -124,7 +145,8 @@ for _ in $(seq 1 "$MAX_MINUTES"); do
     consecutive_quiet=0
   fi
 
-  if [ "$consecutive_quiet" -ge 2 ]; then
+  observed=$(( $(date -u +%s) - START_EPOCH ))
+  if [ "$consecutive_quiet" -ge 2 ] && [ "$observed" -ge "$MIN_OBSERVE_SECONDS" ]; then
     echo "ZERO CONFERMATO: nessun campione nuovo da ${age}s (atteso $(( ($(date -u +%s) - START_EPOCH) / 60 )) minuti)"
     exit 0
   fi

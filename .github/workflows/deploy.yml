@@ -162,8 +162,9 @@ jobs:
       # Richiede un publish RID-specific; --self-contained false tiene il
       # pacchetto framework-dependent, perche' il runtime ce lo mette Flex.
       # ⚠️ R2R raddoppia il pacchetto (5,9 -> 12,1 MB) e Flex lo scarica a
-      # ogni cold start: che il saldo sia positivo va MISURATO in Fase 7, non
-      # assunto.
+      # ogni cold start. Il saldo fra JIT risparmiato e byte in piu' NON e'
+      # misurato: la Metrica 2 misura il cold start .NET con R2R, senza un
+      # deploy senza R2R con cui confrontarlo. Non va detto che conviene.
       - name: Publish del worker .NET
         if: inputs.language == 'dotnet'
         run: |

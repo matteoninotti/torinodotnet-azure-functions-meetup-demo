@@ -44,8 +44,15 @@ let look_back = 30m;
 let first_seen = AppRequests
 | where TimeGenerated between (win_start - look_back .. win_end) and Name == 'resize'
 | summarize first_on_instance = min(TimeGenerated) by AppRoleInstance;
+// Le tracce si cercano oltre win_end. La riga RESIZE_METRICS dell'ultima
+// richiesta porta il timestamp del server, e l'orologio del Mac che stampa
+// RUN_END e' indietro (~52 ms misurati con sntp il 2026-09-24): con la finestra
+// esatta l'ultima richiesta di ogni run restava senza metriche (language 'n/d').
+// Allargare non contamina: la join e' sugli OperationId delle richieste DENTRO
+// la finestra, e le tracce di un run successivo non ne hanno nessuno.
+let trace_slack = 5m;
 let metrics = AppTraces
-| where TimeGenerated between (win_start .. win_end)
+| where TimeGenerated between (win_start .. win_end + trace_slack)
 | where Message startswith 'RESIZE_METRICS'
 // Il JSON si estrae con una regex e NON con substring(Message, 15), che pure
 // funzionava su Python e .NET: il worker Go APPENDE gli attributi
