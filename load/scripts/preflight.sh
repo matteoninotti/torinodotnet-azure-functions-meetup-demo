@@ -106,8 +106,12 @@ if [ "$zero_failed" -ne 0 ]; then
   exit 1
 fi
 
+# La riconferma segue una conferma gia' valida, che ha osservato l'app per
+# almeno MIN_OBSERVE_SECONDS, e fra le due non passa traffico: un'istanza viva
+# sarebbe gia' comparsa. Qui bastano le due letture quiete consecutive, senza
+# rifare l'osservazione minima (~1 minuto invece di 5).
 echo "Riconferma di torinodotnet-${TARGET}, per ultima:"
-RESOURCE_GROUP="$RESOURCE_GROUP" "$SCRIPT_DIR/wait-for-zero.sh" "$TARGET" || {
+MIN_OBSERVE_SECONDS=0 RESOURCE_GROUP="$RESOURCE_GROUP" "$SCRIPT_DIR/wait-for-zero.sh" "$TARGET" || {
   echo "PREFLIGHT FALLITO: torinodotnet-${TARGET} non e' a zero istanze alla riconferma." >&2
   exit 1
 }
