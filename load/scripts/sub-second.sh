@@ -3,8 +3,8 @@
 # Run "sotto il secondo": sotto il minimo fatturabile i tre linguaggi pagano
 # la stessa bolletta, anche se le loro durate sono diverse (D126 punto 6).
 #
-#   ./load/scripts/sub-second.sh run <serie>      # le richieste
-#   ./load/scripts/sub-second.sh report <serie>   # la lettura, >= 6 min dopo
+#   ./load/scripts/sub-second.sh run <serie> [linguaggio...]      # le richieste
+#   ./load/scripts/sub-second.sh report <serie> [linguaggio...]   # la lettura, >= 6 min dopo
 #
 # Per ciascun linguaggio, uno alla volta: una richiesta di riscaldamento e
 # poi 20 in sequenza, count=1. Le 20 NON finiscono su un'istanza sola: con il
@@ -34,9 +34,10 @@ SERIES="${2:-}"
   || { echo "uso: $0 <run|report> <serie> [linguaggio...]" >&2; exit 2; }
 shift 2
 LANGS=(python dotnet go)
-# Il report si puo' limitare ad alcuni linguaggi, per esempio quando uno dei
-# tre si e' interrotto a meta'.
-[ "$MODE" = report ] && [ "$#" -gt 0 ] && LANGS=("$@")
+# Run e report si possono limitare ad alcuni linguaggi, per esempio per
+# rifarne uno che si e' interrotto a meta'.
+[ "$#" -gt 0 ] && LANGS=("$@")
+for l in "${LANGS[@]}"; do case "$l" in python|dotnet|go) ;; *) echo "linguaggio sconosciuto: $l" >&2; exit 2 ;; esac; done
 N_WARM=20
 COUNT=1
 IMAGE=npm-install-7-years.jpg
