@@ -60,6 +60,11 @@ WS=$(az monitor log-analytics workspace show --resource-group "$RESOURCE_GROUP" 
   || { echo "workspace non trovato: $(cat "$AZ_ERR")" >&2; exit 1; }
 
 WINDOW="TimeGenerated between (datetime(${WIN_START}) .. datetime(${WIN_END})) and AppRoleName startswith 'torinodotnet-'"
+# Le tracce: quelle della finestra, piu' quelle scritte fino a 5 minuti dopo
+# da un'operazione cominciata DENTRO la finestra. L'orologio del server e'
+# avanti rispetto a quello che stampa RUN_END (~52 ms, sntp, 2026-09-24): la
+# traccia dell'ultima richiesta cadeva oltre win_end e mancava dall'export.
+TRACES="AppTraces | where ${WINDOW} or (TimeGenerated between (datetime(${WIN_END}) .. datetime(${WIN_END}) + 5m) and OperationId in ((AppRequests | where ${WINDOW} | distinct OperationId)))"
 
 query() {
   az monitor log-analytics query --workspace "$WS" --analytics-query "$1" -o json 2>"$AZ_ERR" \
@@ -67,8 +72,8 @@ query() {
 }
 
 query "AppRequests | where ${WINDOW} | order by TimeGenerated asc" >"$OUT_DIR/requests.json"
-query "AppTraces | where ${WINDOW} | order by TimeGenerated asc" >"$OUT_DIR/traces.json"
-counts=$(query "union (AppRequests | where ${WINDOW} | summarize n=count() | extend t='requests'), (AppTraces | where ${WINDOW} | summarize n=count() | extend t='traces')")
+query "${TRACES} | order by TimeGenerated asc" >"$OUT_DIR/traces.json"
+counts=$(query "union (AppRequests | where ${WINDOW} | summarize n=count() | extend t='requests'), (${TRACES} | summarize n=count() | extend t='traces')")
 
 python3 - "$OUT_DIR" "$EXPECTED" "$counts" <<'EOF'
 import collections, json, sys
