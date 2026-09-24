@@ -55,16 +55,20 @@ jobs:
     # GitHub la applica prima che il job parta.
     environment: production
     steps:
-      # Il vincolo esiste gia' di fatto — la credenziale federata OIDC e'
-      # registrata sul solo subject `refs/heads/main`, quindi da un branch di
-      # fase il login fallisce (D44) — ma fallisce con AADSTS700213, che e'
-      # l'errore sbagliato da leggere: dice "credenziale non trovata" e manda a
-      # cercare un problema di configurazione che non c'e'. Qui il motivo vero
-      # e' scritto, e prima che la pipeline tocchi qualcosa.
+      # Con `environment: production` sul job, il subject del token OIDC e'
+      # `...:environment:production` e non contiene piu' il branch: la
+      # credenziale federata registrata per questo job e' su quel subject, e
+      # il vincolo "solo da main" lo applica la deployment branch policy
+      # dell'environment, non Entra. Un branch che non referenzia l'environment
+      # presenta invece `...:ref:refs/heads/<branch>` e il login fallisce con
+      # AADSTS700213 (D44), che e' l'errore sbagliato da leggere: dice
+      # "credenziale non trovata" e manda a cercare un problema di
+      # configurazione che non c'e'. Qui il motivo vero e' scritto, e prima che
+      # la pipeline tocchi qualcosa.
       - name: Il deploy parte solo da main (D44)
         if: github.ref != 'refs/heads/main'
         run: |
-          echo "::error::Questo workflow e' stato lanciato da ${{ github.ref }}. Il deploy parte solo da refs/heads/main: la credenziale federata OIDC e' registrata su quel subject e su nessun altro (D44). Per deployare il codice di una fase, prima si porta su main."
+          echo "::error::Questo workflow e' stato lanciato da ${{ github.ref }}. Il deploy parte solo da refs/heads/main: l'environment production ammette solo quel branch (D44). Per deployare il codice di una fase, prima si porta su main."
           exit 1
 
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
@@ -79,11 +83,25 @@ jobs:
       # Le immagini di test non stanno nel repo. Arrivano da un container
       # privato dello stesso storage account: la pipeline e' gia' autenticata
       # su Azure, quindi non serve nessun secret in piu' (D40).
+      #
+      # L'account si ricava dall'app che si sta deployando, che sa gia' da quale
+      # account prende il pacchetto: e' deterministico a prescindere da quanti
+      # account ci siano nel gruppo, e non aggiunge nessun nome cablato oltre a
+      # quello dell'app. `sed -n ... p` e non un `sed` normale: un valore che
+      # non e' un URL di blob deve dare una stringa vuota, non passare
+      # invariato, altrimenti il `test -n` non ferma niente.
       - name: Scarica le immagini di test
         run: |
-          STORAGE=$(az storage account list \
+          STORAGE=$(az resource show \
             --resource-group "$RESOURCE_GROUP" \
-            --query "[0].name" -o tsv)
+            --name "torinodotnet-${{ inputs.language }}" \
+            --resource-type Microsoft.Web/sites --api-version 2024-04-01 \
+            --query "properties.functionAppConfig.deployment.storage.value" -o tsv \
+            | sed -nE 's#^https://([a-z0-9]{3,24})\.blob\.core\.windows\.net/.*#\1#p')
+          test -n "$STORAGE" || {
+            echo "impossibile ricavare lo storage account di torinodotnet-${{ inputs.language }}" >&2
+            exit 1
+          }
           az storage blob download-batch \
             --account-name "$STORAGE" \
             --source "$IMAGES_CONTAINER" \
