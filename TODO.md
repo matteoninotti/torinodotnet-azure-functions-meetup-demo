@@ -117,7 +117,7 @@ Rifiniture al pannello per renderlo più efficace dal vivo. Non tocca il percors
 - [ ] **[S] Controllo differenziale della Metrica 4** (D61): due deploy della sola app Python identici tranne un import pesante a livello di modulo (pochi secondi, sotto il timeout di app init di 30 s), una richiesta singola a freddo su ciascuno, confronto dei MB-ms. Cancella le costanti ignote — allocazione istanza, avvio host, arrotondamento — perché identiche nei due deploy, e testa **direttamente** il corollario da slide (dove metti l'init cambia se lo paghi) invece di dedurlo. La misura assoluta resta `[M]`: questa è ciò che la rende conclusiva.
 - [ ] **[M] Run "sotto il secondo"** per mostrare il minimo fatturabile che azzera il vantaggio di Go.
 - [ ] **[M] Calcolo analitico always-ready** per linguaggio (nessuna istanza accesa davvero).
-- [ ] **[M] Spegnere tutto** e verificare la spesa effettiva.
+- [ ] **[M] Spegnere tutto** e verificare la spesa effettiva. ⚠️ Sul resource group c'è un lock `CanNotDelete`: il teardown fallisce finché non lo si toglie con `az lock delete --name protezione-pre-talk -g rg-torinodotnet-demo`.
 
 ## Fase 8 — Presentazione
 
