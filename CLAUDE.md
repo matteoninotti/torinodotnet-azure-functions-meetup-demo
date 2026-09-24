@@ -41,4 +41,4 @@ Piano **Flex Consumption** · instance size **2.048 MB** · regione **Italy Nort
 
 ## Checklist pre-presentazione
 
-Rileggere la [tabella delle versioni linguaggio supportate su Flex](https://learn.microsoft.com/en-us/azure/azure-functions/flex-consumption-plan#supported-language-stack-versions) **il giorno prima**. Disabilitare eventuali istanze always-ready dopo le demo.
+Rileggere la [tabella delle versioni linguaggio supportate su Flex](https://learn.microsoft.com/en-us/azure/azure-functions/flex-consumption-plan#supported-language-stack-versions) **il giorno prima**. Disabilitare eventuali istanze always-ready dopo le demo. Verificare che il tetto di istanze sia a 5 sulle tre app: `./load/scripts/postflight.sh --check`.
