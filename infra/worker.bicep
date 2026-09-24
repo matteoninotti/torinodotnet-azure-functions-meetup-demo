@@ -27,6 +27,11 @@ param instanceMemoryMB int
 param perInstanceConcurrency int
 
 @description('Tetto di scale-out. Non garantisce di arrivarci: la quota regionale di core puo\' fermare prima.')
+// Il minimo della piattaforma e' 1 ("the lowest maximum instance count value is
+// 1", [event-driven scaling](https://learn.microsoft.com/en-us/azure/azure-functions/event-driven-scaling#limit-scale-out)).
+// 40 e' un pavimento del template, non della piattaforma: sotto quel valore la
+// Metrica 3 non misurerebbe lo scale-out. Il tetto basso fuori dalle finestre di
+// misura si imposta da CLI, non da qui (load/README.md, "Protocollo di ogni run").
 @minValue(40)
 @maxValue(1000)
 param maximumInstanceCount int
