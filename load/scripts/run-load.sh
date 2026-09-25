@@ -13,6 +13,10 @@
 # Scrive in load/output/<etichetta>/:
 #   k6.log        l'output completo di k6
 #   summary.json  il riepilogo di fine test (--summary-export)
+#   client.csv.gz una riga per metrica per richiesta (--out csv), con il
+#                 timestamp in millisecondi: e' da qui che si ricava la curva
+#                 lato client secondo per secondo, che il riepilogo non ha
+#                 ([k6, CSV](https://grafana.com/docs/k6/latest/results-output/real-time/csv/))
 #   cpu.tsv       CPU e memoria del processo k6, un campione ogni 2 s
 # e aggiunge una riga a load/output/runs.tsv con RUN_START, RUN_END e
 # http_reqs: i tre argomenti di export-run.sh.
@@ -50,11 +54,12 @@ LEDGER="$REPO_ROOT/load/output/runs.tsv"
 [ -e "$OUT_DIR" ] && { echo "esiste gia' ${OUT_DIR}: etichetta gia' usata" >&2; exit 2; }
 mkdir -p "$OUT_DIR"
 
-k6 run \
+K6_CSV_TIME_FORMAT=unix_milli k6 run \
   -e LANGUAGE="$LANGUAGE" -e RPS="$RPS" -e DURATION="$DURATION" -e COUNT="$COUNT" \
   -e IMAGE="$IMAGE" -e WIDTH="$WIDTH" -e QUALITY="$QUALITY" \
   -e PRE_ALLOCATED_VUS="$PRE_ALLOCATED_VUS" -e MAX_VUS="$MAX_VUS" \
   --summary-export "$OUT_DIR/summary.json" \
+  --out "csv=$OUT_DIR/client.csv.gz" \
   "$REPO_ROOT/load/scripts/resize.js" >"$OUT_DIR/k6.log" 2>&1 &
 K6_PID=$!
 
@@ -92,6 +97,22 @@ failed_rate = m["http_req_failed"].get("value", m["http_req_failed"].get("rate",
 interrupted = int(last_progress[1])
 dur = m["http_req_duration"]
 
+# Il CSV per richiesta deve essere integro e completo: una riga di
+# http_req_duration per ogni richiesta del riepilogo. Un file troncato darebbe
+# una curva lato client con dei buchi, senza nessun segnale.
+import gzip
+try:
+    with gzip.open(f"{out_dir}/client.csv.gz", "rt") as f:
+        header = f.readline().rstrip("\n").split(",")
+        i_name = header.index("metric_name")
+        csv_reqs = sum(1 for line in f if line.split(",", i_name + 1)[i_name] == "http_req_duration")
+except Exception as e:
+    print(f"ERRORE: client.csv.gz illeggibile: {e}", file=sys.stderr)
+    sys.exit(1)
+if csv_reqs != http_reqs:
+    print(f"ERRORE: client.csv.gz ha {csv_reqs} righe http_req_duration, il riepilogo {http_reqs} richieste", file=sys.stderr)
+    sys.exit(1)
+
 cpu = [float(l.split("\t")[1]) for l in open(f"{out_dir}/cpu.tsv").read().splitlines()[1:] if l.count("\t") == 2]
 cpu_max = max(cpu) if cpu else float("nan")
 cpu_med = sorted(cpu)[len(cpu) // 2] if cpu else float("nan")
@@ -100,6 +121,7 @@ offered = (http_reqs + dropped) / duration_s
 print(f"{label} [{lang}] {k6_version}")
 print(f"  RUN_START {run_start}  RUN_END {run_end}")
 print(f"  http_reqs {http_reqs}  dropped_iterations {dropped}  interrupted {interrupted}  http_req_failed {failed_rate:.4f}")
+print(f"  client.csv.gz: {csv_reqs} richieste, integro")
 print(f"  tasso richiesto {rps:g}/s, iterazioni partite {http_reqs / duration_s:.2f}/s sulla finestra nominale")
 print(f"  http_req_duration med {dur['med']:.0f} ms  p95 {dur['p(95)']:.0f}  p99 {dur['p(99)']:.0f}  max {dur['max']:.0f}")
 print(f"  CPU k6: mediana {cpu_med:.1f}%  massimo {cpu_max:.1f}%  ({len(cpu)} campioni)")
